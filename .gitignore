@@ -25,6 +25,9 @@ dist/
 checkpoints/
 *.log
 
+# Generated synthetic/raw data (reproducible via data/generate_synthetic_transactions.py)
+data/*.csv
+
 # Env / secrets
 .env
 
