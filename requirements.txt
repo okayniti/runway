@@ -4,3 +4,6 @@ torch
 pandas
 numpy
 pydantic
+streamlit
+altair
+requests
