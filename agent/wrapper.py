@@ -44,19 +44,24 @@ class ForecastValidationError(RuntimeError):
 
 def build_forecast_output(
     forecaster: CashFlowForecaster,
-    transactions_csv: str | Path,
+    transactions: pd.DataFrame,
     shortfall_threshold: float,
     max_retries: int = 3,
 ) -> ForecastOutput:
     """Run inference, attach risk flagging + contributing line items, and
-    validate the result against ForecastOutput — retrying on failure."""
+    validate the result against ForecastOutput — retrying on failure.
+
+    `transactions` is a DataFrame already in memory (date, type, category,
+    amount, ...) — callers reading from a CSV or an API request body both
+    parse into this same shape first.
+    """
     last_error: Exception | None = None
 
     for attempt in range(1, max_retries + 1):
         try:
-            result: ForecastResult = forecaster.predict_from_transactions(transactions_csv)
+            result: ForecastResult = forecaster.predict_from_dataframe(transactions)
 
-            transactions = pd.read_csv(transactions_csv)
+            transactions = transactions.copy()
             transactions["date"] = pd.to_datetime(transactions["date"])
             as_of_date = transactions["date"].max()
 
@@ -108,7 +113,7 @@ def main() -> None:
     forecaster = CashFlowForecaster(args.checkpoint)
     output = build_forecast_output(
         forecaster=forecaster,
-        transactions_csv=args.data_csv,
+        transactions=pd.read_csv(args.data_csv),
         shortfall_threshold=args.shortfall_threshold,
         max_retries=args.max_retries,
     )

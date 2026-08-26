@@ -105,16 +105,15 @@ class CashFlowForecaster:
 
         return ForecastResult(forecast=forecast, confidence=confidence)
 
-    def predict_from_transactions(self, transactions_csv: str | Path) -> ForecastResult:
-        """Convenience path: build daily features from a raw transaction
-        ledger and forecast from its most recent `lookback` days.
+    def predict_from_dataframe(self, transactions: pd.DataFrame) -> ForecastResult:
+        """Build daily features from a raw transaction ledger already in
+        memory and forecast from its most recent `lookback` days.
 
         If fewer than `lookback` days of history exist, the window is
         zero-padded on the left and `observed_days` is set accordingly, so
         the confidence score reflects the thin history rather than the
         model silently pretending it saw a full window.
         """
-        transactions = pd.read_csv(transactions_csv)
         daily = build_daily_features(transactions)
 
         if len(daily) < self.lookback:
@@ -127,6 +126,13 @@ class CashFlowForecaster:
             feature_window = daily[self.feature_columns].to_numpy(dtype=np.float32)[-self.lookback :]
 
         return self.predict_window(feature_window, observed_days=observed_days)
+
+    def predict_from_transactions(self, transactions_csv: str | Path) -> ForecastResult:
+        """Convenience path: read a transaction ledger CSV from disk and
+        forecast from it. See predict_from_dataframe for the in-memory
+        equivalent (used by the API layer, which already has parsed
+        transactions and shouldn't round-trip them through a file)."""
+        return self.predict_from_dataframe(pd.read_csv(transactions_csv))
 
 
 def main() -> None:
