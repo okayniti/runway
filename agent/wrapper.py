@@ -1,0 +1,119 @@
+"""
+Agent layer: wraps the model's raw forecast + confidence into the strict
+ForecastOutput schema, adds shortfall risk detection and contributing
+line-item attribution, and enforces the schema with a bounded retry loop.
+
+Forecast generation here is deterministic (no LLM sampling), so a schema
+validation failure means the *pipeline* produced a malformed result — bad
+input data, a NaN forecast, an edge case in the line-item attribution —
+rather than "the model guessed wrong." build_forecast_output() re-runs the
+full build on failure up to `max_retries` times before raising, so a
+transient issue has a chance to clear before the caller sees a hard error.
+Once retries are exhausted, it raises rather than returning an unvalidated
+result — nothing downstream ever sees a payload that skipped the schema.
+
+Usage:
+    python agent/wrapper.py --shortfall-threshold 400000
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pandas as pd
+from pydantic import ValidationError
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from model.infer import CashFlowForecaster, ForecastResult  # noqa: E402
+
+try:
+    from .risk import check_shortfall_risk, identify_contributing_line_items
+    from .schema import ConfidenceInfo, ForecastOutput
+except ImportError:  # running as a top-level script rather than a package
+    from risk import check_shortfall_risk, identify_contributing_line_items
+    from schema import ConfidenceInfo, ForecastOutput
+
+
+class ForecastValidationError(RuntimeError):
+    """Raised when agent output still fails schema validation after all retries."""
+
+
+def build_forecast_output(
+    forecaster: CashFlowForecaster,
+    transactions_csv: str | Path,
+    shortfall_threshold: float,
+    max_retries: int = 3,
+) -> ForecastOutput:
+    """Run inference, attach risk flagging + contributing line items, and
+    validate the result against ForecastOutput — retrying on failure."""
+    last_error: Exception | None = None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            result: ForecastResult = forecaster.predict_from_transactions(transactions_csv)
+
+            transactions = pd.read_csv(transactions_csv)
+            transactions["date"] = pd.to_datetime(transactions["date"])
+            as_of_date = transactions["date"].max()
+
+            risk_flag, risk_reason, _ = check_shortfall_risk(result.forecast, shortfall_threshold)
+
+            contributing_line_items = []
+            if risk_flag:
+                contributing_line_items = identify_contributing_line_items(
+                    transactions=transactions,
+                    as_of_date=as_of_date,
+                    horizon=forecaster.horizon,
+                    lookback=forecaster.lookback,
+                )
+
+            candidate = ForecastOutput(
+                forecast=[float(v) for v in result.forecast],
+                confidence=ConfidenceInfo(
+                    score=result.confidence.score,
+                    is_low_confidence=result.confidence.is_low_confidence,
+                    reasons=result.confidence.reasons,
+                ),
+                risk_flag=risk_flag,
+                risk_reason=risk_reason,
+                contributing_line_items=contributing_line_items,
+            )
+            return candidate
+
+        except (ValidationError, ValueError) as exc:
+            last_error = exc
+            continue
+
+    raise ForecastValidationError(
+        f"forecast output failed schema validation after {max_retries} attempts: {last_error}"
+    ) from last_error
+
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run the agent layer's risk-flagging forecast wrapper.")
+    parser.add_argument("--data-csv", default=str(_PROJECT_ROOT / "data" / "synthetic_transactions.csv"))
+    parser.add_argument(
+        "--checkpoint", default=str(_PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt")
+    )
+    parser.add_argument("--shortfall-threshold", type=float, required=True)
+    parser.add_argument("--max-retries", type=int, default=3)
+    args = parser.parse_args()
+
+    forecaster = CashFlowForecaster(args.checkpoint)
+    output = build_forecast_output(
+        forecaster=forecaster,
+        transactions_csv=args.data_csv,
+        shortfall_threshold=args.shortfall_threshold,
+        max_retries=args.max_retries,
+    )
+    print(output.model_dump_json(indent=2))
+
+
+if __name__ == "__main__":
+    main()
