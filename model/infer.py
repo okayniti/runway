@@ -24,11 +24,11 @@ import torch
 
 try:
     from .confidence import ConfidenceBreakdown, score_window_confidence
-    from .dataset import build_daily_features
+    from .dataset import TARGET_COLUMN, build_daily_features
     from .model import BiLSTMForecaster
 except ImportError:  # running as `python model/infer.py`, not `-m model.infer`
     from confidence import ConfidenceBreakdown, score_window_confidence
-    from dataset import build_daily_features
+    from dataset import TARGET_COLUMN, build_daily_features
     from model import BiLSTMForecaster
 
 
@@ -75,9 +75,21 @@ class CashFlowForecaster:
         self.typical_scale = float(np.mean(np.abs(self.y_mean)))
 
     def predict_window(
-        self, feature_window: np.ndarray, observed_days: int | None = None
+        self,
+        feature_window: np.ndarray,
+        baseline_cash_position: float,
+        observed_days: int | None = None,
     ) -> ForecastResult:
-        """Forecast the next `horizon` days from one (lookback, num_features) window.
+        """Forecast the next `horizon` days of absolute cash position from
+        one (lookback, num_features) window.
+
+        The model is trained to predict the *change* in cash position over
+        the horizon, not the raw cumulative value (see model/dataset.py's
+        module docstring for why). `baseline_cash_position` — the actual
+        cash_position on this window's last day — is added back onto the
+        model's output here, so every caller of this method always gets an
+        absolute cash_position forecast, matching what the rest of the
+        pipeline (risk checks, the API schema, the dashboard) expects.
 
         `observed_days` lets a caller flag that only part of the window is
         backed by real transaction data (e.g. a business with less history
@@ -94,7 +106,8 @@ class CashFlowForecaster:
 
         with torch.no_grad():
             pred_norm = self.model(input_tensor).cpu().numpy()[0]
-        forecast = pred_norm * self.y_std[0] + self.y_mean[0]
+        forecast_delta = pred_norm * self.y_std[0] + self.y_mean[0]
+        forecast = forecast_delta + baseline_cash_position
 
         net_flow_idx = self.feature_columns.index("net_flow")
         net_flow_window = feature_window[:, net_flow_idx]
@@ -119,6 +132,7 @@ class CashFlowForecaster:
         model silently pretending it saw a full window.
         """
         daily = build_daily_features(transactions)
+        baseline_cash_position = float(daily[TARGET_COLUMN].iloc[-1])
 
         if len(daily) < self.lookback:
             observed_days = len(daily)
@@ -129,7 +143,9 @@ class CashFlowForecaster:
             observed_days = self.lookback
             feature_window = daily[self.feature_columns].to_numpy(dtype=np.float32)[-self.lookback :]
 
-        return self.predict_window(feature_window, observed_days=observed_days)
+        return self.predict_window(
+            feature_window, baseline_cash_position=baseline_cash_position, observed_days=observed_days
+        )
 
     def predict_from_transactions(self, transactions_csv: str | Path) -> ForecastResult:
         """Convenience path: read a transaction ledger CSV from disk and

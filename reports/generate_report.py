@@ -37,7 +37,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from model.dataset import build_daily_features  # noqa: E402
+from model.dataset import TARGET_COLUMN, build_daily_features  # noqa: E402
 from model.infer import CashFlowForecaster  # noqa: E402
 
 
@@ -97,9 +97,12 @@ def run_batch(
             continue
 
         feature_window = daily[forecaster.feature_columns].to_numpy(dtype=np.float32)[window_start:window_end]
+        baseline_cash_position = float(daily[TARGET_COLUMN].iloc[window_end - 1])
 
         try:
-            result = forecaster.predict_window(feature_window, observed_days=lookback)
+            result = forecaster.predict_window(
+                feature_window, baseline_cash_position=baseline_cash_position, observed_days=lookback
+            )
         except Exception as exc:  # noqa: BLE001 - report any pipeline failure, not just expected ones
             failures.append(FailedWindow(as_of_date=as_of_date, reason=str(exc)))
             continue
