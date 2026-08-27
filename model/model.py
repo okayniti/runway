@@ -23,9 +23,9 @@ class BiLSTMForecaster(nn.Module):
         self,
         input_size: int,
         horizon: int,
-        hidden_size: int = 64,
-        num_layers: int = 2,
-        dropout: float = 0.2,
+        hidden_size: int = 16,
+        num_layers: int = 1,
+        dropout: float = 0.3,
     ) -> None:
         """
         Parameters
