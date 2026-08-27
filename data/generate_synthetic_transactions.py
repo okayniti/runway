@@ -86,6 +86,7 @@ class SyntheticDataConfig:
 
 
 def _weekly_seasonality_multiplier(dates: pd.DatetimeIndex, config: SyntheticDataConfig) -> np.ndarray:
+    """Per-date volume multiplier: suppressed on weekends, elevated on Mon/Fri."""
     weekday = dates.weekday.to_numpy()  # Monday=0 ... Sunday=6
     multiplier = np.ones(len(dates))
     multiplier[weekday >= 5] = config.weekend_volume_multiplier
@@ -94,6 +95,7 @@ def _weekly_seasonality_multiplier(dates: pd.DatetimeIndex, config: SyntheticDat
 
 
 def _monthly_seasonality_multiplier(dates: pd.DatetimeIndex, config: SyntheticDataConfig) -> np.ndarray:
+    """Per-date volume multiplier: smooth bump near month-start/month-end."""
     day_of_month = dates.day.to_numpy()
     days_in_month = dates.days_in_month.to_numpy()
     distance_to_edge = np.minimum(day_of_month - 1, days_in_month - day_of_month)
@@ -262,6 +264,7 @@ def generate_synthetic_transactions(config: SyntheticDataConfig | None = None) -
 
 
 def main() -> None:
+    """CLI entry point: generate a synthetic ledger and write it to CSV."""
     parser = argparse.ArgumentParser(description="Generate synthetic cash-flow transactions.")
     parser.add_argument("--start-date", default="2024-01-01")
     parser.add_argument("--num-days", type=int, default=90)

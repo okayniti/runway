@@ -34,6 +34,9 @@ import numpy as np
 
 @dataclass
 class ConfidenceBreakdown:
+    """The overall confidence score plus the three component scores and
+    human-readable reasons that produced it (see score_window_confidence)."""
+
     score: float  # overall confidence in [0, 1]; higher means more reliable
     is_low_confidence: bool
     history_completeness: float

@@ -13,6 +13,12 @@ from torch import nn
 
 
 class BiLSTMForecaster(nn.Module):
+    """Bidirectional LSTM encoder + MLP head for multi-day cash-flow forecasting.
+
+    See the module docstring for the forecasting approach; `forward()` for
+    how the encoder's final states are combined into the horizon output.
+    """
+
     def __init__(
         self,
         input_size: int,
@@ -21,6 +27,15 @@ class BiLSTMForecaster(nn.Module):
         num_layers: int = 2,
         dropout: float = 0.2,
     ) -> None:
+        """
+        Parameters
+        ----------
+        input_size : number of features per day (see model.dataset.FEATURE_COLUMNS).
+        horizon : number of future days to predict in one forward pass.
+        hidden_size : LSTM hidden state size per direction.
+        num_layers : number of stacked LSTM layers.
+        dropout : applied between stacked LSTM layers (if num_layers > 1) and in the head.
+        """
         super().__init__()
         self.lstm = nn.LSTM(
             input_size=input_size,

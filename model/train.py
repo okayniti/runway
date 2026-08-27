@@ -31,6 +31,7 @@ except ImportError:  # running as `python model/train.py`, not `-m model.train`
 
 
 def set_seed(seed: int) -> None:
+    """Seed numpy and torch so a training run is reproducible end to end."""
     np.random.seed(seed)
     torch.manual_seed(seed)
 
@@ -38,6 +39,11 @@ def set_seed(seed: int) -> None:
 def chronological_split(
     X: np.ndarray, y: np.ndarray, test_fraction: float
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Split windows by time, not randomly: the earliest `1 - test_fraction`
+    of windows become train, the most recent `test_fraction` become test.
+
+    Returns (X_train, y_train, X_test, y_test).
+    """
     split_idx = int(len(X) * (1 - test_fraction))
     if split_idx <= 0 or split_idx >= len(X):
         raise ValueError(
@@ -58,6 +64,8 @@ def fit_mean_std(array: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
+    """Compute RMSE, MAE, and R2 over all predicted values, flattened across
+    samples and horizon steps into one pooled set of errors."""
     y_true_flat = y_true.reshape(-1)
     y_pred_flat = y_pred.reshape(-1)
     errors = y_pred_flat - y_true_flat
@@ -73,6 +81,8 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
 
 
 def main() -> None:
+    """CLI entry point: load data, train, evaluate on the held-out split,
+    print RMSE/MAE/R2, and save a checkpoint. See module docstring for usage."""
     project_root = Path(__file__).resolve().parent.parent
 
     parser = argparse.ArgumentParser(description="Train the Bi-LSTM cash-flow forecaster.")

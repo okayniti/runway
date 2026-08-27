@@ -33,9 +33,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from model.dataset import build_daily_features  # noqa: E402
 from model.infer import CashFlowForecaster  # noqa: E402
@@ -43,6 +43,8 @@ from model.infer import CashFlowForecaster  # noqa: E402
 
 @dataclass
 class WindowReport:
+    """One successfully forecast window's confidence outcome, for one as-of date."""
+
     as_of_date: pd.Timestamp
     confidence_score: float
     is_low_confidence: bool
@@ -51,6 +53,9 @@ class WindowReport:
 
 @dataclass
 class FailedWindow:
+    """One as-of date the pipeline could not forecast, and why (as_of_date
+    is None only when the offset itself falls before the start of the ledger)."""
+
     as_of_date: pd.Timestamp | None
     reason: str
 
@@ -118,6 +123,9 @@ def render_markdown(
     window_reports: list[WindowReport],
     failed_windows: list[FailedWindow],
 ) -> str:
+    """Render the exception report as a markdown string: recorded held-out
+    accuracy, a batch summary, every low-confidence window, and every
+    window the pipeline could not forecast."""
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     num_windows = len(window_reports) + len(failed_windows)
     low_confidence = [w for w in window_reports if w.is_low_confidence]
@@ -176,12 +184,14 @@ def render_markdown(
 
 
 def main() -> None:
+    """CLI entry point: run a batch of forecasts and write the markdown
+    exception report to --output-dir. See module docstring for usage."""
     parser = argparse.ArgumentParser(
         description="Generate a batch exception report for the cash-flow forecaster."
     )
-    parser.add_argument("--data-csv", default=str(_PROJECT_ROOT / "data" / "synthetic_transactions.csv"))
+    parser.add_argument("--data-csv", default=str(PROJECT_ROOT / "data" / "synthetic_transactions.csv"))
     parser.add_argument(
-        "--checkpoint", default=str(_PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt")
+        "--checkpoint", default=str(PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt")
     )
     parser.add_argument(
         "--num-windows",
@@ -189,7 +199,7 @@ def main() -> None:
         default=30,
         help="How many as-of dates to batch-forecast, stepping back from the most recent day.",
     )
-    parser.add_argument("--output-dir", default=str(_PROJECT_ROOT / "reports"))
+    parser.add_argument("--output-dir", default=str(PROJECT_ROOT / "reports"))
     args = parser.parse_args()
 
     forecaster = CashFlowForecaster(args.checkpoint)

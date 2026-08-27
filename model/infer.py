@@ -34,6 +34,8 @@ except ImportError:  # running as `python model/infer.py`, not `-m model.infer`
 
 @dataclass
 class ForecastResult:
+    """A forecast paired with its confidence — the only shape inference calls return."""
+
     forecast: np.ndarray  # shape (horizon,): predicted cash_position per day
     confidence: ConfidenceBreakdown
 
@@ -42,6 +44,8 @@ class CashFlowForecaster:
     """Wraps a trained checkpoint for inference with attached confidence scoring."""
 
     def __init__(self, checkpoint_path: str | Path, device: str | None = None):
+        """Load a checkpoint (model weights, config, normalization stats,
+        recorded test metrics) and rebuild the model ready for inference."""
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
         config = checkpoint["config"]
 

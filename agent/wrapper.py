@@ -24,9 +24,9 @@ from pathlib import Path
 import pandas as pd
 from pydantic import ValidationError
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from model.infer import CashFlowForecaster, ForecastResult  # noqa: E402
 
@@ -99,12 +99,14 @@ def build_forecast_output(
 
 
 def main() -> None:
+    """CLI entry point: run the full agent pipeline once against a CSV
+    ledger and print the validated ForecastOutput as JSON."""
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the agent layer's risk-flagging forecast wrapper.")
-    parser.add_argument("--data-csv", default=str(_PROJECT_ROOT / "data" / "synthetic_transactions.csv"))
+    parser.add_argument("--data-csv", default=str(PROJECT_ROOT / "data" / "synthetic_transactions.csv"))
     parser.add_argument(
-        "--checkpoint", default=str(_PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt")
+        "--checkpoint", default=str(PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt")
     )
     parser.add_argument("--shortfall-threshold", type=float, required=True)
     parser.add_argument("--max-retries", type=int, default=3)

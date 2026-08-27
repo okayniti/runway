@@ -27,15 +27,15 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from agent.schema import ForecastOutput  # noqa: E402
 from agent.wrapper import ForecastValidationError, build_forecast_output  # noqa: E402
 from model.infer import CashFlowForecaster  # noqa: E402
 
-CHECKPOINT_PATH = _PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt"
+CHECKPOINT_PATH = PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt"
 
 _state: dict = {"forecaster": None, "load_error": None}
 
@@ -81,6 +81,9 @@ class ForecastRequest(BaseModel):
     def _must_include_both_transaction_types(
         cls, value: list[TransactionRecord]
     ) -> list[TransactionRecord]:
+        """Reject a transaction list that's neither inflows nor outflows
+        (e.g. every record failed a stricter check upstream and slipped
+        through as some other type) rather than silently forecasting on it."""
         types = {t.type for t in value}
         if not types & {"inflow", "outflow"}:
             raise ValueError("transactions must include at least one inflow or outflow record")
@@ -89,6 +92,9 @@ class ForecastRequest(BaseModel):
 
 @app.get("/health")
 def health(response: Response) -> dict:
+    """Liveness/readiness check. Returns 200/{"status": "ok"} once the model
+    checkpoint has loaded, or 503 with a detail message if it failed or
+    hasn't finished loading yet."""
     if _state["load_error"] is not None:
         response.status_code = 503
         return {"status": "unhealthy", "detail": f"model failed to load: {_state['load_error']}"}
@@ -100,6 +106,9 @@ def health(response: Response) -> dict:
 
 @app.post("/forecast", response_model=ForecastOutput)
 def forecast(request: ForecastRequest) -> ForecastOutput:
+    """Forecast the next 14 days of cash position from recent transaction
+    history and return the full agent output: forecast, confidence,
+    risk flag/reason, and contributing line items."""
     forecaster: CashFlowForecaster | None = _state["forecaster"]
     if forecaster is None:
         raise HTTPException(

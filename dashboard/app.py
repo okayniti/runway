@@ -33,6 +33,7 @@ st.set_page_config(page_title="Cash Flow Forecast", layout="centered")
 
 
 def _confidence_level(score: float) -> str:
+    """Bucket a confidence score into a display level for color-coding."""
     if score >= 0.7:
         return "high"
     if score >= 0.4:

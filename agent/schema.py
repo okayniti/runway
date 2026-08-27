@@ -62,6 +62,8 @@ class ForecastOutput(BaseModel):
     @field_validator("risk_reason")
     @classmethod
     def _risk_reason_matches_flag(cls, value: str | None, info) -> str | None:
+        """Enforce risk_reason is set if and only if risk_flag is True, so
+        the two fields can never drift apart."""
         risk_flag = info.data.get("risk_flag")
         if risk_flag and not value:
             raise ValueError("risk_reason must be a non-empty string when risk_flag is True")
