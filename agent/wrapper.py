@@ -13,7 +13,7 @@ Once retries are exhausted, it raises rather than returning an unvalidated
 result — nothing downstream ever sees a payload that skipped the schema.
 
 Usage:
-    python agent/wrapper.py --shortfall-threshold 400000
+    python agent/wrapper.py --shortfall-threshold 6000000
 """
 
 from __future__ import annotations
