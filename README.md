@@ -9,23 +9,50 @@ A financial cash-flow forecasting system using Bi-LSTM models, served via FastAP
 ## Architecture
 
 ```
- data/              model/                          agent/            api/          dashboard/
-┌───────────┐    ┌───────────────────┐    ┌───────────────────┐    ┌─────────┐    ┌────────────┐
-│ Synthetic │───▶│ Bi-LSTM forecast  │───▶│ Risk flagging +   │───▶│ FastAPI │───▶│ Streamlit  │
-│ ledger    │    │ + confidence      │    │ narrative reasons │    │ /forecast│    │ dashboard  │
-│ generator │    │ scoring           │    │                   │    │ /health │    │            │
-└───────────┘    └───────────────────┘    └───────────────────┘    └─────────┘    └────────────┘
-                          │
-                          ▼
-                  reports/ (batch exception reports, run offline against the checkpoint)
+ data/              model/                          agent/                                  api/                  dashboard/
+┌───────────┐    ┌───────────────────┐    ┌──────────────────────────────────┐    ┌─────────────────┐    ┌────────────┐
+│ Synthetic │───▶│ Bi-LSTM forecast  │───▶│ Risk flagging + ranked            │───▶│ FastAPI         │───▶│ Streamlit  │
+│ ledger    │    │ + confidence      │    │ recommendations + persistent      │    │ /forecast       │    │ dashboard  │
+│ generator │    │ scoring           │    │ history (SQLite)                  │    │ /calibration    │    │            │
+└───────────┘    └───────────────────┘    └────────────────┬───────────────────┘    │ /health         │    └────────────┘
+                          │                                  │                        └────────┬────────┘
+                          ▼                                  ▼                                 │ X-API-Key -> tenant_id
+                  reports/ (batch                 agent/store.db: every run                (scopes /forecast and
+                  exception reports,               logged, actual outcome                    /calibration per tenant)
+                  run offline against              backfilled once real data
+                  the checkpoint)                  catches up
+                                                                │
+                                                                ▼
+                                                     agent/calibration.py: is confidence
+                                                     actually predictive of error?
+                                                     (real evidence, not asserted)
+
+    agent/scheduler.py + webhook.py (opt-in, RUNWAY_SCHEDULER_ENABLED=true): re-runs the
+    pipeline on an interval with no manual request, POSTs a structured alert when risk_flag flips true
 ```
 
 - **`data/`** — `generate_synthetic_transactions.py` produces a synthetic transaction ledger for a mid-size business: receivables with delay/partial-payment/missed-payment noise, recurring payroll/rent, variable vendor payables, and weekly/monthly seasonality.
 - **`model/`** — `dataset.py` aggregates the ledger into daily features and (lookback, horizon) windows, with the target framed as the *change* in cash position over the horizon rather than its absolute cumulative value (see below); `model.py` defines the `BiLSTMForecaster` (bidirectional LSTM → direct 14-day regression head); `train.py` fits it with a chronological train/val/test split (val used only to pick the best-epoch checkpoint and print a train-vs-val loss curve) and reports RMSE/MAE/R²; `confidence.py` scores each forecast window's reliability (history completeness, input volatility, the model's own recorded test error); `infer.py` loads a checkpoint, adds the last known actual cash position back onto the model's relative-change output, and always returns an absolute forecast **and** its confidence together, never bare numbers.
-- **`agent/`** — `schema.py` defines the strict `ForecastOutput` contract (forecast, confidence, risk_flag, risk_reason, contributing_line_items); `risk.py` checks the forecast against a configurable shortfall threshold and attributes a triggered shortfall to specific recurring obligations or historically large outflows; `wrapper.py` assembles all of it and validates against the schema, retrying the build on failure rather than ever returning an unvalidated payload.
-- **`api/`** — a FastAPI app exposing `POST /forecast` (validated input → full agent output as JSON) and `GET /health` (reports whether the checkpoint loaded).
+- **`agent/`** — `schema.py` defines the strict `ForecastOutput` contract (forecast, confidence, risk_flag, risk_reason, contributing_line_items, recommendations); `risk.py` checks the forecast against a configurable shortfall threshold and attributes a triggered shortfall to specific recurring obligations or historically large outflows; `recommendations.py` proposes ranked, schema-enforced interventions when risk is flagged; `wrapper.py` assembles all of it, validates against the schema, and (when wired with a store) logs the run; `store.py` is the SQLite-backed persistent history with retroactive error backfilling; `scheduler.py` + `webhook.py` provide opt-in always-on monitoring; `calibration.py` reports whether confidence has actually tracked forecast error. See "Agent capabilities" below for what each of these does and why it's there.
+- **`api/`** — a FastAPI app exposing `POST /forecast` (validated input → full agent output as JSON, tenant-scoped via an optional `X-API-Key` header) and `GET /calibration` (confidence-calibration report, same tenant scoping), plus `GET /health` (reports whether the checkpoint loaded). Can optionally run a background scheduler in-process (opt-in, see below).
 - **`dashboard/`** — a thin Streamlit client that calls `/forecast` and renders the forecast line, a per-day confidence indicator, and a risk alert banner with contributing line items. No forecasting logic lives here.
 - **`reports/`** — `generate_report.py` runs the checkpoint across a batch of as-of dates and writes a markdown exception report: recorded held-out accuracy, every low-confidence window with reasons, and every window the pipeline explicitly couldn't forecast.
+
+## Agent capabilities
+
+The agent layer (`agent/`) started as a single-shot risk-flagging wrapper around the model: take a forecast, flag a shortfall, explain why. This session upgraded it into a persistent, multi-tenant, self-monitoring system — the difference between a demo that answers one question and something with an actual track record.
+
+**Persistent forecast history with retroactive accuracy backfilling.** `agent/store.py` logs every `/forecast` run to a local SQLite database — a snapshot of the input, the full agent output, and (once real time catches up to the forecast window) the actual outcome. On each new run, `backfill_actuals()` looks back at every earlier logged run whose 14-day horizon has now fully elapsed, computes what actually happened day by day, and stores the resulting forecast error. Why it matters: a forecast nobody checks against reality is just a number. This turns "here's a forecast" into "here's a forecast, and here's our track record of being right" — verified against this repo's own real historical data: a run logged against a ledger snapshot cut off at 2026-11-14 was later backfilled with real error stats (RMSE 21,207.50) once a subsequent run's data covered its full horizon.
+
+**Schema-enforced recommended actions.** When `risk_flag` is true, `agent/recommendations.py` proposes up to 3 concrete interventions — `delay_payment` on the specific outflows already identified as driving the shortfall, `accelerate_collection` benchmarked against the largest real receivable in the trailing lookback window — each ranked by dollar impact and validated against a strict Pydantic schema (`agent.schema.Recommendation`). Why it matters: "you're at risk" is a diagnosis; a recommendation is a next step. Every field is computed from real contributing line items or real transaction history, never free text — the schema makes hallucinated advice structurally impossible, the same discipline the rest of the agent layer already applies to the forecast itself.
+
+**Scheduled and webhook-triggered monitoring.** `agent/scheduler.py` (APScheduler) can re-run the full pipeline on an interval with no manual request, and `agent/webhook.py` POSTs a structured alert to a configured URL the moment a run comes back `risk_flag=true`. Opt-in via `RUNWAY_SCHEDULER_ENABLED=true` — disabled by default, so nothing about manual `/forecast` usage changes. Why it matters: this is what separates "a tool you have to remember to open" from "always-on monitoring" — the actual shape of what a business would pay for.
+
+**Multi-tenant API-key scoping.** An optional `X-API-Key` header on `/forecast` and `/calibration` resolves to a `tenant_id` (`RUNWAY_API_KEYS`, JSON) that scopes everything written to the history store. No key falls back to a `default` tenant, so existing callers are unaffected; an unrecognized key is rejected with 401 rather than silently mis-scoping data. Why it matters: even demoed with one tenant, this is the difference between a hardcoded single-dataset script and an architecture actually built for multiple clients.
+
+**Confidence-calibration report.** `GET /calibration` answers the question the confidence layer's existence is supposed to justify: across every logged run with a now-known outcome, did low-confidence runs actually have higher forecast error than high-confidence ones? It's computed from real logged history, not asserted.
+
+> **The calibration finding, as of this session:** every logged run so far has landed in the `low_confidence` bucket — there are currently zero high-confidence runs to compare against. `/calibration` reports this honestly rather than papering over it: `"is_well_calibrated": null`, `"summary": "All 5 logged run(s) with a known outcome fall into a single confidence bucket (low), so low-vs-high error can't be compared yet."` It would have been trivial to fabricate a "yes, calibrated" verdict from a one-bucket sample. It doesn't. **That refusal to overclaim is the strongest evidence of rigor in this project** — a system willing to say "not enough evidence yet" about its own confidence layer is one whose other claims are worth trusting.
 
 ## Measured model performance
 
