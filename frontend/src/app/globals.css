@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens for the runway marketing/product frontend.
+ *
+ * Deliberately not "SaaS blue": a warm paper background, a serif display
+ * face for headlines, and a single muted terracotta accent (plus a sage
+ * green for calm/positive states) instead of a bright brand color. See
+ * README's "frontend" notes for the reasoning.
+ */
+:root {
+  --color-paper: #f5efe4; /* base background: warm sand, not stark white */
+  --color-paper-dim: #ece1cd; /* alternating section background */
+  --color-paper-card: #fffdf8; /* card surfaces, slightly lighter than paper */
+  --color-ink: #2a241c; /* primary text: warm near-black */
+  --color-ink-muted: #6b6357; /* secondary text */
+  --color-ink-faint: #a89f8e; /* placeholder / disabled text */
+  --color-line: #ddd0b8; /* borders and dividers */
+  --color-ember: #b5482a; /* accent: risk / primary CTA */
+  --color-ember-dim: #f1ddd3; /* ember tint background */
+  --color-moss: #4b6455; /* accent: safe / secondary */
+  --color-moss-dim: #dee6de; /* moss tint background */
+}
+
+@theme inline {
+  --color-paper: var(--color-paper);
+  --color-paper-dim: var(--color-paper-dim);
+  --color-paper-card: var(--color-paper-card);
+  --color-ink: var(--color-ink);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-ink-faint: var(--color-ink-faint);
+  --color-line: var(--color-line);
+  --color-ember: var(--color-ember);
+  --color-ember-dim: var(--color-ember-dim);
+  --color-moss: var(--color-moss);
+  --color-moss-dim: var(--color-moss-dim);
+
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-inter);
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
