@@ -12,12 +12,23 @@ GET /health reports whether the model checkpoint loaded successfully at
 startup, so a broken/missing checkpoint fails fast and visibly instead of
 surfacing as a 500 on someone's first real request.
 
+A background scheduler (agent/scheduler.py) can optionally re-run the
+forecast on an interval and POST a webhook when risk flips true, without
+anyone calling /forecast manually — disabled by default, opt in with:
+    RUNWAY_SCHEDULER_ENABLED=true
+    RUNWAY_SCHEDULE_INTERVAL_SECONDS=3600   (default)
+    RUNWAY_WEBHOOK_URL=https://example.com/hook  (optional; no webhook fires without it)
+    RUNWAY_SCHEDULE_DATA_CSV=data/synthetic_transactions.csv  (default)
+    RUNWAY_SCHEDULE_SHORTFALL_THRESHOLD=0   (default)
+    RUNWAY_SCHEDULE_TENANT_ID=default        (default)
+
 Run with:
     uvicorn api.app:app --reload
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from contextlib import asynccontextmanager
 from datetime import date
@@ -32,13 +43,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from agent.schema import ForecastOutput  # noqa: E402
+from agent.scheduler import start_scheduler  # noqa: E402
 from agent.store import DEFAULT_TENANT_ID, ForecastStore  # noqa: E402
 from agent.wrapper import ForecastValidationError, build_forecast_output  # noqa: E402
 from model.infer import CashFlowForecaster  # noqa: E402
 
 CHECKPOINT_PATH = PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt"
 
-_state: dict = {"forecaster": None, "load_error": None, "store": None}
+_state: dict = {"forecaster": None, "load_error": None, "store": None, "scheduler": None}
 
 
 @asynccontextmanager
@@ -48,7 +60,25 @@ async def lifespan(app: FastAPI):
     except Exception as exc:  # noqa: BLE001 - surfaced via /health, not a crash
         _state["load_error"] = str(exc)
     _state["store"] = ForecastStore()
+
+    if os.environ.get("RUNWAY_SCHEDULER_ENABLED", "").lower() in ("1", "true", "yes"):
+        if _state["forecaster"] is not None:
+            _state["scheduler"] = start_scheduler(
+                forecaster=_state["forecaster"],
+                data_csv=os.environ.get(
+                    "RUNWAY_SCHEDULE_DATA_CSV", str(PROJECT_ROOT / "data" / "synthetic_transactions.csv")
+                ),
+                shortfall_threshold=float(os.environ.get("RUNWAY_SCHEDULE_SHORTFALL_THRESHOLD", "0")),
+                store=_state["store"],
+                tenant_id=os.environ.get("RUNWAY_SCHEDULE_TENANT_ID", DEFAULT_TENANT_ID),
+                webhook_url=os.environ.get("RUNWAY_WEBHOOK_URL") or None,
+                interval_seconds=int(os.environ.get("RUNWAY_SCHEDULE_INTERVAL_SECONDS", "3600")),
+            )
+
     yield
+
+    if _state["scheduler"] is not None:
+        _state["scheduler"].shutdown(wait=False)
 
 
 app = FastAPI(

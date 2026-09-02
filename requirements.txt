@@ -7,3 +7,4 @@ pydantic
 streamlit
 altair
 requests
+apscheduler
