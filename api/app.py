@@ -32,12 +32,13 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from agent.schema import ForecastOutput  # noqa: E402
+from agent.store import DEFAULT_TENANT_ID, ForecastStore  # noqa: E402
 from agent.wrapper import ForecastValidationError, build_forecast_output  # noqa: E402
 from model.infer import CashFlowForecaster  # noqa: E402
 
 CHECKPOINT_PATH = PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt"
 
-_state: dict = {"forecaster": None, "load_error": None}
+_state: dict = {"forecaster": None, "load_error": None, "store": None}
 
 
 @asynccontextmanager
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI):
         _state["forecaster"] = CashFlowForecaster(CHECKPOINT_PATH)
     except Exception as exc:  # noqa: BLE001 - surfaced via /health, not a crash
         _state["load_error"] = str(exc)
+    _state["store"] = ForecastStore()
     yield
 
 
@@ -123,6 +125,8 @@ def forecast(request: ForecastRequest) -> ForecastOutput:
             forecaster=forecaster,
             transactions=transactions,
             shortfall_threshold=request.shortfall_threshold,
+            store=_state["store"],
+            tenant_id=DEFAULT_TENANT_ID,
         )
     except ForecastValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

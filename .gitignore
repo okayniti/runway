@@ -31,6 +31,11 @@ data/*.csv
 # Generated exception reports (reproducible via reports/generate_report.py)
 reports/*.md
 
+# Local operational state -- accumulated forecast-run history, not reproducible
+# build output, but still shouldn't be committed (it's this environment's data,
+# not source).
+agent/*.db
+
 # Env / secrets
 .env
 

@@ -12,6 +12,12 @@ transient issue has a chance to clear before the caller sees a hard error.
 Once retries are exhausted, it raises rather than returning an unvalidated
 result — nothing downstream ever sees a payload that skipped the schema.
 
+Persistence is opt-in: pass `store=` (an agent.store.ForecastStore) to log
+the run and retroactively backfill actual outcomes for earlier runs whose
+forecast horizon has now elapsed. Callers that don't pass a store (the
+batch report tool, ad-hoc scripts) get identical behavior to before —
+nothing about existing usage changes.
+
 Usage:
     python agent/wrapper.py --shortfall-threshold 6000000
 """
@@ -28,14 +34,17 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from model.dataset import build_daily_features  # noqa: E402
 from model.infer import CashFlowForecaster, ForecastResult  # noqa: E402
 
 try:
     from .risk import check_shortfall_risk, identify_contributing_line_items
     from .schema import ConfidenceInfo, ForecastOutput
+    from .store import DEFAULT_TENANT_ID, ForecastStore, summarize_transactions
 except ImportError:  # running as a top-level script rather than a package
     from risk import check_shortfall_risk, identify_contributing_line_items
     from schema import ConfidenceInfo, ForecastOutput
+    from store import DEFAULT_TENANT_ID, ForecastStore, summarize_transactions
 
 
 class ForecastValidationError(RuntimeError):
@@ -47,6 +56,8 @@ def build_forecast_output(
     transactions: pd.DataFrame,
     shortfall_threshold: float,
     max_retries: int = 3,
+    store: ForecastStore | None = None,
+    tenant_id: str = DEFAULT_TENANT_ID,
 ) -> ForecastOutput:
     """Run inference, attach risk flagging + contributing line items, and
     validate the result against ForecastOutput — retrying on failure.
@@ -54,6 +65,12 @@ def build_forecast_output(
     `transactions` is a DataFrame already in memory (date, type, category,
     amount, ...) — callers reading from a CSV or an API request body both
     parse into this same shape first.
+
+    If `store` is given, this run is logged (see agent.store.ForecastStore
+    .log_run) and any earlier logged runs for `tenant_id` whose forecast
+    horizon has now fully elapsed within this call's `transactions` get
+    their actual outcome backfilled — this is how "here's a forecast"
+    becomes "here's a forecast, and here's our track record."
     """
     last_error: Exception | None = None
 
@@ -87,6 +104,18 @@ def build_forecast_output(
                 risk_reason=risk_reason,
                 contributing_line_items=contributing_line_items,
             )
+
+            if store is not None:
+                store.log_run(
+                    tenant_id=tenant_id,
+                    as_of_date=as_of_date.date(),
+                    horizon=forecaster.horizon,
+                    input_snapshot=summarize_transactions(transactions),
+                    output=candidate,
+                )
+                daily = build_daily_features(transactions)
+                store.backfill_actuals(tenant_id=tenant_id, daily=daily)
+
             return candidate
 
         except (ValidationError, ValueError) as exc:
