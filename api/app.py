@@ -52,6 +52,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from agent.calibration import CalibrationReport, build_calibration_report  # noqa: E402
 from agent.schema import ForecastOutput  # noqa: E402
 from agent.scheduler import start_scheduler  # noqa: E402
 from agent.store import DEFAULT_TENANT_ID, ForecastStore  # noqa: E402
@@ -161,6 +162,18 @@ def health(response: Response) -> dict:
         response.status_code = 503
         return {"status": "unhealthy", "detail": "model not yet loaded"}
     return {"status": "ok"}
+
+
+@app.get("/calibration", response_model=CalibrationReport)
+def calibration(tenant_id: str = Depends(resolve_tenant)) -> CalibrationReport:
+    """Across every logged run for this tenant with a now-known actual
+    outcome, report whether low-confidence runs really did have higher
+    forecast error than high-confidence runs — real evidence of whether
+    the confidence layer means anything, computed from logged history,
+    not asserted."""
+    store: ForecastStore = _state["store"]
+    runs = store.get_runs_with_errors(tenant_id)
+    return build_calibration_report(tenant_id, runs)
 
 
 @app.post("/forecast", response_model=ForecastOutput)
