@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { FileSpreadsheet, Sparkles, UploadCloud } from "lucide-react";
 
+import { ProcessingMicrocopy } from "@/components/processing-microcopy";
 import { ResultDisplay } from "@/components/result-display";
 import { ApiError, runForecast } from "@/lib/api";
 import { CsvFormatError, csvToTransactionRecords } from "@/lib/csv";
@@ -166,7 +167,7 @@ export function LiveForecastPanel() {
           {/* Reserve space for status/result so nothing shifts around it */}
           <div className="mt-6 min-h-6">
             {error && <p className="text-sm text-ember">{error}</p>}
-            {loading && <p className="text-sm text-ink-muted">Running the forecast against your ledger…</p>}
+            <ProcessingMicrocopy active={loading} />
           </div>
         </div>
 
