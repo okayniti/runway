@@ -22,12 +22,22 @@ anyone calling /forecast manually — disabled by default, opt in with:
     RUNWAY_SCHEDULE_SHORTFALL_THRESHOLD=0   (default)
     RUNWAY_SCHEDULE_TENANT_ID=default        (default)
 
+/forecast is multi-tenant-shaped: an optional X-API-Key header resolves to
+a tenant_id that scopes everything written to the history store (run logs,
+backfilled actuals) for that request. No key -> the "default" tenant, so
+every existing caller (the dashboard, curl examples above, anything from
+before this feature existed) keeps working unmodified. A key that IS
+provided but isn't recognized -> 401, so a typo'd key can't silently land
+data in the wrong tenant. Configure real keys with:
+    RUNWAY_API_KEYS='{"<key>": "<tenant_id>", ...}'   (JSON; default has one demo key)
+
 Run with:
     uvicorn api.app:app --reload
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -35,7 +45,7 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -50,7 +60,24 @@ from model.infer import CashFlowForecaster  # noqa: E402
 
 CHECKPOINT_PATH = PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt"
 
+# API key -> tenant_id. Override with RUNWAY_API_KEYS (JSON) for real
+# deployments; the built-in default exists purely so the demo key used in
+# examples/tests resolves to something without requiring env setup.
+API_KEYS: dict[str, str] = json.loads(os.environ.get("RUNWAY_API_KEYS", '{"demo-key": "demo-tenant"}'))
+
 _state: dict = {"forecaster": None, "load_error": None, "store": None, "scheduler": None}
+
+
+def resolve_tenant(x_api_key: str | None = Header(default=None)) -> str:
+    """No key -> DEFAULT_TENANT_ID, so every pre-existing caller keeps
+    working unmodified. An unrecognized key -> 401, so a typo can't
+    silently scope data to the wrong (nonexistent) tenant."""
+    if x_api_key is None:
+        return DEFAULT_TENANT_ID
+    tenant_id = API_KEYS.get(x_api_key)
+    if tenant_id is None:
+        raise HTTPException(status_code=401, detail="invalid API key")
+    return tenant_id
 
 
 @asynccontextmanager
@@ -137,10 +164,11 @@ def health(response: Response) -> dict:
 
 
 @app.post("/forecast", response_model=ForecastOutput)
-def forecast(request: ForecastRequest) -> ForecastOutput:
+def forecast(request: ForecastRequest, tenant_id: str = Depends(resolve_tenant)) -> ForecastOutput:
     """Forecast the next 14 days of cash position from recent transaction
     history and return the full agent output: forecast, confidence,
-    risk flag/reason, and contributing line items."""
+    risk flag/reason, and contributing line items. Scoped by tenant_id,
+    resolved from the optional X-API-Key header (see module docstring)."""
     forecaster: CashFlowForecaster | None = _state["forecaster"]
     if forecaster is None:
         raise HTTPException(
@@ -156,7 +184,7 @@ def forecast(request: ForecastRequest) -> ForecastOutput:
             transactions=transactions,
             shortfall_threshold=request.shortfall_threshold,
             store=_state["store"],
-            tenant_id=DEFAULT_TENANT_ID,
+            tenant_id=tenant_id,
         )
     except ForecastValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
