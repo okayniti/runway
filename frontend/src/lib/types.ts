@@ -47,6 +47,14 @@ export interface TransactionRecord {
   note: string | null;
 }
 
+export interface TrackRecordStats {
+  tenant_id: string;
+  total_forecasts_run: number;
+  shortfalls_flagged: number;
+  verified_against_actuals: number;
+  directional_accuracy_pct: number | null;
+}
+
 export interface CalibrationBucket {
   label: "low_confidence" | "high_confidence";
   num_runs: number;

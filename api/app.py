@@ -55,6 +55,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from agent.calibration import CalibrationReport, build_calibration_report  # noqa: E402
 from agent.schema import ForecastOutput  # noqa: E402
 from agent.scheduler import start_scheduler  # noqa: E402
+from agent.stats import TrackRecordStats, build_track_record_stats  # noqa: E402
 from agent.store import DEFAULT_TENANT_ID, ForecastStore  # noqa: E402
 from agent.wrapper import ForecastValidationError, build_forecast_output  # noqa: E402
 from model.infer import CashFlowForecaster  # noqa: E402
@@ -174,6 +175,18 @@ def calibration(tenant_id: str = Depends(resolve_tenant)) -> CalibrationReport:
     store: ForecastStore = _state["store"]
     runs = store.get_runs_with_errors(tenant_id)
     return build_calibration_report(tenant_id, runs)
+
+
+@app.get("/stats", response_model=TrackRecordStats)
+def stats(tenant_id: str = Depends(resolve_tenant)) -> TrackRecordStats:
+    """Real aggregate numbers for a frontend's track-record display --
+    total forecasts run, shortfalls flagged, and directional accuracy on
+    every run verified against a real outcome so far. Additive endpoint;
+    doesn't change any existing route's behavior or shape."""
+    store: ForecastStore = _state["store"]
+    total, flagged = store.get_summary_counts(tenant_id)
+    verified = store.get_verified_forecast_actual_pairs(tenant_id)
+    return build_track_record_stats(tenant_id, total, flagged, verified)
 
 
 @app.post("/forecast", response_model=ForecastOutput)

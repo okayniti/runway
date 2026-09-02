@@ -209,6 +209,29 @@ class ForecastStore:
         self._conn.commit()
         return backfilled
 
+    def get_summary_counts(self, tenant_id: str) -> tuple[int, int]:
+        """(total_runs, risk_flagged_runs) for this tenant -- the two
+        simplest, most honest track-record numbers: how many forecasts
+        have actually been run, and how many came back flagged."""
+        total = self._conn.execute(
+            "SELECT COUNT(*) FROM forecast_runs WHERE tenant_id = ?", (tenant_id,)
+        ).fetchone()[0]
+        flagged = self._conn.execute(
+            "SELECT COUNT(*) FROM forecast_runs WHERE tenant_id = ? AND risk_flag = 1", (tenant_id,)
+        ).fetchone()[0]
+        return int(total), int(flagged)
+
+    def get_verified_forecast_actual_pairs(self, tenant_id: str) -> list[dict]:
+        """Every run for this tenant with a known actual outcome, as
+        {"forecast", "actual"} dicts (each a list[float]) -- the shape
+        agent.stats needs to compute directional accuracy."""
+        rows = self._conn.execute(
+            "SELECT forecast_json, actual_cash_position_json FROM forecast_runs "
+            "WHERE tenant_id = ? AND actual_cash_position_json IS NOT NULL",
+            (tenant_id,),
+        ).fetchall()
+        return [{"forecast": json.loads(f), "actual": json.loads(a)} for f, a in rows]
+
     def get_runs_with_errors(self, tenant_id: str) -> list[dict]:
         """Every run for this tenant with a known actual outcome, as
         {"confidence_score", "is_low_confidence", "error_rmse", "error_mae"}

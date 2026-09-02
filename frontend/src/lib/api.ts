@@ -1,4 +1,4 @@
-import type { CalibrationReport, ForecastOutput, TransactionRecord } from "@/lib/types";
+import type { CalibrationReport, ForecastOutput, TrackRecordStats, TransactionRecord } from "@/lib/types";
 
 export class ApiError extends Error {}
 
@@ -35,6 +35,14 @@ export async function runForecast(
 
 export async function fetchCalibration(): Promise<CalibrationReport> {
   const response = await fetch("/api/backend/calibration", { cache: "no-store" });
+  if (!response.ok) {
+    throw new ApiError(await readErrorDetail(response));
+  }
+  return response.json();
+}
+
+export async function fetchStats(): Promise<TrackRecordStats> {
+  const response = await fetch("/api/backend/stats", { cache: "no-store" });
   if (!response.ok) {
     throw new ApiError(await readErrorDetail(response));
   }
