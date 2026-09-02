@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { FileSpreadsheet, Sparkles, UploadCloud } from "lucide-react";
 
+import { ResultDisplay } from "@/components/result-display";
 import { ApiError, runForecast } from "@/lib/api";
 import { CsvFormatError, csvToTransactionRecords } from "@/lib/csv";
 import type { ForecastOutput, TransactionRecord } from "@/lib/types";
@@ -17,6 +18,7 @@ export function LiveForecastPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ForecastOutput | null>(null);
+  const [resultThreshold, setResultThreshold] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadFile(file: File) {
@@ -56,6 +58,7 @@ export function LiveForecastPanel() {
     try {
       const output = await runForecast(transactions, threshold);
       setResult(output);
+      setResultThreshold(threshold);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "The forecast request failed. Is the API running?");
     } finally {
@@ -65,7 +68,7 @@ export function LiveForecastPanel() {
 
   return (
     <section id="forecast" className="px-6 py-28">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-5xl">
         <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-ember">
           Try it on real numbers
         </p>
@@ -77,7 +80,7 @@ export function LiveForecastPanel() {
           and runway will forecast the next fourteen days against it.
         </p>
 
-        <div className="mt-12 rounded-3xl border border-line bg-paper-card p-8 shadow-[0_1px_0_theme(colors.line)] sm:p-10">
+        <div className="mt-12 max-w-3xl rounded-3xl border border-line bg-paper-card p-8 shadow-[0_1px_0_theme(colors.line)] sm:p-10">
           {/* Upload zone */}
           <div
             onDragOver={(e) => {
@@ -167,20 +170,7 @@ export function LiveForecastPanel() {
           </div>
         </div>
 
-        {/* Minimal round-trip proof for now -- the full chart, risk banner,
-            and bento grid arrive in the next commit. */}
-        {result && !loading && (
-          <div className="mt-8 rounded-2xl border border-line bg-paper-card p-6 text-sm text-ink-muted">
-            <p className="text-ink">
-              Forecast complete — {result.risk_flag ? "shortfall risk detected." : "no shortfall risk detected."}
-            </p>
-            <p className="mt-1">
-              Day 1: {result.forecast[0]?.toLocaleString()} · Day 14:{" "}
-              {result.forecast[result.forecast.length - 1]?.toLocaleString()} · Confidence:{" "}
-              {result.confidence.score.toFixed(2)}
-            </p>
-          </div>
-        )}
+        {result && !loading && <ResultDisplay result={result} threshold={resultThreshold} />}
       </div>
     </section>
   );
