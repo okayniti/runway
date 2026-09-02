@@ -43,3 +43,26 @@ body {
   background: var(--color-paper);
   color: var(--color-ink);
 }
+
+/* Marquee: two copies of the track sit side by side, translated exactly
+   -50% over the animation so the loop seam is invisible. Paused on hover
+   via the arbitrary-property utility on the element itself in JSX --
+   that utility lives in Tailwind's `@layer utilities`, and CSS cascade
+   layers give ANY layered rule priority over unlayered rules regardless
+   of specificity, so .animate-marquee must be declared inside the same
+   layer or its `animation` shorthand (which resets animation-play-state
+   too) always wins and hover-to-pause silently never applies. */
+@layer utilities {
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-marquee {
+    animation: marquee 32s linear infinite;
+  }
+}

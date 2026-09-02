@@ -1,3 +1,4 @@
+import { CapabilityMarquee } from "@/components/capability-marquee";
 import { Hero } from "@/components/hero";
 import { Nav } from "@/components/nav";
 
@@ -7,6 +8,7 @@ export default function Home() {
       <Nav />
       <main>
         <Hero />
+        <CapabilityMarquee />
       </main>
     </>
   );
