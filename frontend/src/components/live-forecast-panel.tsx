@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { FileSpreadsheet, Sparkles, UploadCloud } from "lucide-react";
 
 import { ProcessingMicrocopy } from "@/components/processing-microcopy";
+import { Reveal } from "@/components/reveal";
 import { ResultDisplay } from "@/components/result-display";
 import { ApiError, runForecast } from "@/lib/api";
 import { CsvFormatError, csvToTransactionRecords } from "@/lib/csv";
@@ -70,18 +71,20 @@ export function LiveForecastPanel() {
   return (
     <section id="forecast" className="px-6 py-28">
       <div className="mx-auto max-w-5xl">
-        <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-ember">
-          Try it on real numbers
-        </p>
-        <h2 className="font-display text-4xl leading-tight text-ink sm:text-5xl">
-          Bring your own ledger.
-        </h2>
-        <p className="mt-4 max-w-xl text-lg text-ink-muted">
-          Upload a transaction history CSV, set the cash floor you care about,
-          and runway will forecast the next fourteen days against it.
-        </p>
+        <Reveal>
+          <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-ember">
+            Try it on real numbers
+          </p>
+          <h2 className="font-display text-4xl leading-tight text-ink sm:text-5xl">
+            Bring your own ledger.
+          </h2>
+          <p className="mt-4 max-w-xl text-lg text-ink-muted">
+            Upload a transaction history CSV, set the cash floor you care about,
+            and runway will forecast the next fourteen days against it.
+          </p>
+        </Reveal>
 
-        <div className="mt-12 max-w-3xl rounded-3xl border border-line bg-paper-card p-8 shadow-[0_1px_0_theme(colors.line)] sm:p-10">
+        <Reveal delay={0.12} className="mt-12 max-w-3xl rounded-3xl border border-line bg-paper-card p-8 shadow-[0_1px_0_theme(colors.line)] sm:p-10">
           {/* Upload zone */}
           <div
             onDragOver={(e) => {
@@ -169,7 +172,7 @@ export function LiveForecastPanel() {
             {error && <p className="text-sm text-ember">{error}</p>}
             <ProcessingMicrocopy active={loading} />
           </div>
-        </div>
+        </Reveal>
 
         {result && !loading && <ResultDisplay result={result} threshold={resultThreshold} />}
       </div>

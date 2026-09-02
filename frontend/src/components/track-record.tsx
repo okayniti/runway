@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, useInView } from "framer-motion";
 
+import { Reveal } from "@/components/reveal";
 import { fetchStats } from "@/lib/api";
 import type { TrackRecordStats } from "@/lib/types";
 
@@ -53,17 +54,19 @@ export function TrackRecord() {
   return (
     <section id="track-record" className="bg-ink px-6 py-28">
       <div className="mx-auto max-w-5xl">
-        <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-paper/50">Track record</p>
-        <h2 className="font-display text-4xl leading-tight text-paper sm:text-5xl">
-          Every forecast, checked against what actually happened.
-        </h2>
-        <p className="mt-4 max-w-xl text-lg text-paper/70">
-          {failed
-            ? "Couldn't reach the history store just now — these will populate once it's back."
-            : "These numbers come straight from the persistent history store — not marketing copy. If nothing has run yet, they say so honestly."}
-        </p>
+        <Reveal>
+          <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-paper/50">Track record</p>
+          <h2 className="font-display text-4xl leading-tight text-paper sm:text-5xl">
+            Every forecast, checked against what actually happened.
+          </h2>
+          <p className="mt-4 max-w-xl text-lg text-paper/70">
+            {failed
+              ? "Couldn't reach the history store just now — these will populate once it's back."
+              : "These numbers come straight from the persistent history store — not marketing copy. If nothing has run yet, they say so honestly."}
+          </p>
+        </Reveal>
 
-        <div className="mt-16 grid grid-cols-2 gap-x-8 gap-y-12 sm:grid-cols-4">
+        <Reveal delay={0.12} className="mt-16 grid grid-cols-2 gap-x-8 gap-y-12 sm:grid-cols-4">
           <StatCard label="Forecasts run" value={stats?.total_forecasts_run ?? null} />
           <StatCard label="Shortfalls flagged" value={stats?.shortfalls_flagged ?? null} />
           <StatCard label="Verified against real outcomes" value={stats?.verified_against_actuals ?? null} />
@@ -73,7 +76,7 @@ export function TrackRecord() {
             decimals={0}
             suffix="%"
           />
-        </div>
+        </Reveal>
       </div>
     </section>
   );

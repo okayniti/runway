@@ -10,6 +10,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { Reveal } from "@/components/reveal";
+
 // What actually feeds the forecast — real system capabilities, not
 // fabricated customer logos. Each of these corresponds to a real,
 // working piece of the pipeline (data/, model/, agent/).
@@ -42,15 +44,17 @@ function Track() {
 
 export function CapabilityMarquee() {
   return (
-    <section className="border-y border-line bg-paper-dim py-6">
-      <div className="overflow-hidden">
-        <div className="animate-marquee flex w-max hover:[animation-play-state:paused]">
-          <Track />
-          <div aria-hidden="true" className="flex shrink-0">
+    <Reveal>
+      <section className="border-y border-line bg-paper-dim py-6">
+        <div className="overflow-hidden">
+          <div className="animate-marquee flex w-max hover:[animation-play-state:paused]">
             <Track />
+            <div aria-hidden="true" className="flex shrink-0">
+              <Track />
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </Reveal>
   );
 }
