@@ -38,10 +38,12 @@ from model.dataset import build_daily_features  # noqa: E402
 from model.infer import CashFlowForecaster, ForecastResult  # noqa: E402
 
 try:
+    from .recommendations import generate_recommendations
     from .risk import check_shortfall_risk, identify_contributing_line_items
     from .schema import ConfidenceInfo, ForecastOutput
     from .store import DEFAULT_TENANT_ID, ForecastStore, summarize_transactions
 except ImportError:  # running as a top-level script rather than a package
+    from recommendations import generate_recommendations
     from risk import check_shortfall_risk, identify_contributing_line_items
     from schema import ConfidenceInfo, ForecastOutput
     from store import DEFAULT_TENANT_ID, ForecastStore, summarize_transactions
@@ -85,11 +87,19 @@ def build_forecast_output(
             risk_flag, risk_reason, _ = check_shortfall_risk(result.forecast, shortfall_threshold)
 
             contributing_line_items = []
+            recommendations = []
             if risk_flag:
                 contributing_line_items = identify_contributing_line_items(
                     transactions=transactions,
                     as_of_date=as_of_date,
                     horizon=forecaster.horizon,
+                    lookback=forecaster.lookback,
+                )
+                recommendations = generate_recommendations(
+                    forecast=[float(v) for v in result.forecast],
+                    contributing_line_items=contributing_line_items,
+                    transactions=transactions,
+                    as_of_date=as_of_date,
                     lookback=forecaster.lookback,
                 )
 
@@ -103,6 +113,7 @@ def build_forecast_output(
                 risk_flag=risk_flag,
                 risk_reason=risk_reason,
                 contributing_line_items=contributing_line_items,
+                recommendations=recommendations,
             )
 
             if store is not None:

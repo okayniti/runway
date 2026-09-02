@@ -48,6 +48,33 @@ class ConfidenceInfo(BaseModel):
     reasons: list[str] = Field(default_factory=list)
 
 
+class Recommendation(BaseModel):
+    """A concrete, numerically-grounded intervention proposed when
+    risk_flag is True (see agent.recommendations). Every field is computed
+    from the forecast, contributing_line_items, or raw transaction
+    history — never freeform/LLM-generated text. "Recommendation" here
+    means "arithmetic projection," not narrative advice."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rank: int = Field(ge=1, description="1 = highest projected impact.")
+    action: str = Field(pattern="^(delay_payment|accelerate_collection)$")
+    description: str
+    reference_date: date
+    reference_category: str
+    reference_amount: float = Field(ge=0)
+    suggested_shift_days: int = Field(
+        description="Positive: push this payment later by N days. Negative: pull this collection forward by N days."
+    )
+    projected_shortfall_relief: float = Field(
+        ge=0,
+        description="Estimated dollar improvement to the forecasted horizon minimum if this action is taken.",
+    )
+    projected_new_minimum: float = Field(
+        description="Forecasted minimum cash position over the horizon, after applying this action's estimated effect."
+    )
+
+
 class ForecastOutput(BaseModel):
     """Strict schema for a single forecast window's agent-layer output."""
 
@@ -58,6 +85,7 @@ class ForecastOutput(BaseModel):
     risk_flag: bool
     risk_reason: str | None = None
     contributing_line_items: list[ContributingLineItem] = Field(default_factory=list)
+    recommendations: list[Recommendation] = Field(default_factory=list)
 
     @field_validator("risk_reason")
     @classmethod

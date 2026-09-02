@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS forecast_runs (
     risk_flag INTEGER NOT NULL,
     risk_reason TEXT,
     contributing_line_items_json TEXT NOT NULL,
+    recommendations_json TEXT NOT NULL DEFAULT '[]',
     actual_cash_position_json TEXT,
     forecast_error_json TEXT,
     error_rmse REAL,
@@ -103,7 +104,20 @@ class ForecastStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after a database file may already exist
+        on disk. SQLite's ADD COLUMN has no IF NOT EXISTS, so each is
+        attempted and a "duplicate column" failure is treated as already-
+        migrated rather than an error."""
+        for statement in ("ALTER TABLE forecast_runs ADD COLUMN recommendations_json TEXT NOT NULL DEFAULT '[]'",):
+            try:
+                self._conn.execute(statement)
+            except sqlite3.OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
 
     def log_run(
         self,
@@ -121,8 +135,8 @@ class ForecastStore:
                 tenant_id, run_at, as_of_date, horizon, horizon_end_date,
                 input_snapshot_json, forecast_json, confidence_score,
                 is_low_confidence, confidence_reasons_json, risk_flag,
-                risk_reason, contributing_line_items_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                risk_reason, contributing_line_items_json, recommendations_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 tenant_id,
@@ -138,6 +152,7 @@ class ForecastStore:
                 int(output.risk_flag),
                 output.risk_reason,
                 json.dumps([item.model_dump(mode="json") for item in output.contributing_line_items]),
+                json.dumps([rec.model_dump(mode="json") for rec in output.recommendations]),
             ),
         )
         self._conn.commit()
@@ -219,7 +234,7 @@ class ForecastStore:
             "SELECT id, tenant_id, run_at, as_of_date, horizon, horizon_end_date, "
             "input_snapshot_json, forecast_json, confidence_score, is_low_confidence, "
             "confidence_reasons_json, risk_flag, risk_reason, contributing_line_items_json, "
-            "actual_cash_position_json, forecast_error_json, "
+            "recommendations_json, actual_cash_position_json, forecast_error_json, "
             "error_rmse, error_mae, error_computed_at "
             "FROM forecast_runs WHERE tenant_id = ? ORDER BY id DESC LIMIT ?",
             (tenant_id, limit),
@@ -245,12 +260,13 @@ class ForecastStore:
                         "risk_flag": bool(row[11]),
                         "risk_reason": row[12],
                         "contributing_line_items": json.loads(row[13]),
+                        "recommendations": json.loads(row[14]),
                     },
-                    actual_cash_position=json.loads(row[14]) if row[14] else None,
-                    forecast_error=json.loads(row[15]) if row[15] else None,
-                    error_rmse=row[16],
-                    error_mae=row[17],
-                    error_computed_at=row[18],
+                    actual_cash_position=json.loads(row[15]) if row[15] else None,
+                    forecast_error=json.loads(row[16]) if row[16] else None,
+                    error_rmse=row[17],
+                    error_mae=row[18],
+                    error_computed_at=row[19],
                 )
             )
         return records
