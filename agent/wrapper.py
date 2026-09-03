@@ -142,6 +142,7 @@ def main() -> None:
     """CLI entry point: run the full agent pipeline once against a CSV
     ledger and print the validated ForecastOutput as JSON."""
     import argparse
+    import sys as _sys
 
     parser = argparse.ArgumentParser(description="Run the agent layer's risk-flagging forecast wrapper.")
     parser.add_argument("--data-csv", default=str(PROJECT_ROOT / "data" / "synthetic_transactions.csv"))
@@ -152,13 +153,30 @@ def main() -> None:
     parser.add_argument("--max-retries", type=int, default=3)
     args = parser.parse_args()
 
+    # Every other entry point into this pipeline degrades cleanly on bad
+    # input: the API returns 422 (Pydantic rejects an empty transaction
+    # list before this code ever runs), the frontend shows a specific
+    # message, the scheduler logs and skips the tick. The CLI had no such
+    # handling -- a missing file or a header-only/empty CSV surfaced as a
+    # raw Python traceback instead of a one-line, actionable error.
+    try:
+        transactions = pd.read_csv(args.data_csv)
+    except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
+        print(f"Couldn't read '{args.data_csv}' as a transaction ledger CSV: {exc}", file=_sys.stderr)
+        raise SystemExit(1) from None
+
     forecaster = CashFlowForecaster(args.checkpoint)
-    output = build_forecast_output(
-        forecaster=forecaster,
-        transactions=pd.read_csv(args.data_csv),
-        shortfall_threshold=args.shortfall_threshold,
-        max_retries=args.max_retries,
-    )
+    try:
+        output = build_forecast_output(
+            forecaster=forecaster,
+            transactions=transactions,
+            shortfall_threshold=args.shortfall_threshold,
+            max_retries=args.max_retries,
+        )
+    except ForecastValidationError as exc:
+        print(f"Forecast pipeline failed: {exc}", file=_sys.stderr)
+        raise SystemExit(1) from None
+
     print(output.model_dump_json(indent=2))
 
 

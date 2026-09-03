@@ -67,8 +67,9 @@ export function csvToTransactionRecords(text: string): TransactionRecord[] {
   const required = ["date", "type", "category", "amount"];
   for (const col of required) {
     if (!header.includes(col)) {
+      const article = /^[aeiou]/.test(col) ? "an" : "a";
       throw new CsvFormatError(
-        `Missing a "${col}" column. Expected: date, type, category, amount, invoice_date, note.`
+        `Missing ${article} "${col}" column. Expected: date, type, category, amount, invoice_date, note.`
       );
     }
   }
