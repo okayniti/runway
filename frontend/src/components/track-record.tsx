@@ -52,7 +52,7 @@ export function TrackRecord() {
   }, []);
 
   return (
-    <section id="track-record" className="bg-ink px-6 py-28">
+    <section id="track-record" className="border-t border-paper/10 bg-ink px-6 py-28">
       <div className="mx-auto max-w-5xl">
         <Reveal>
           <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-paper/50">Track record</p>
