@@ -11,10 +11,10 @@ confidence score in [0, 1]:
 2. Input volatility — the coefficient of variation of net cash flow over
    the lookback window. A business whose daily cash flow swings wildly is
    inherently harder to forecast than one with a smooth, repeating pattern.
-3. Recent model error — the held-out test RMSE recorded at training time
-   (stored in the checkpoint), expressed as a fraction of the typical cash
-   position scale. A model that already showed high forecast error on its
-   own test set should report lower confidence on every window it produces,
+3. Recent model error — the held-out test R2 recorded at training time
+   (stored in the checkpoint), already normalized against the target's own
+   variance. A model that already showed weak explanatory power on its own
+   test set should report lower confidence on every window it produces,
    not just the volatile ones.
 
 None of these signals require ground truth for the window being scored —
@@ -72,22 +72,41 @@ def _volatility_score(net_flow_window: np.ndarray) -> float:
     return float(np.clip(1.0 - cv / 2.0, 0.0, 1.0))
 
 
-def _model_error_score(test_rmse: float, typical_scale: float) -> float:
-    """1.0 when the model's recorded held-out RMSE is small relative to the
-    typical magnitude of the target series, decaying toward 0 as that
-    relative error grows past 100%."""
-    if typical_scale <= 0:
-        return 0.5  # no reliable scale to compare against
-    relative_error = test_rmse / typical_scale
-    return float(np.clip(1.0 - relative_error, 0.0, 1.0))
+def _model_error_score(test_r2: float) -> float:
+    """1.0 when the model's recorded held-out test R2 is perfect (explains
+    all target variance), decaying toward 0 as R2 approaches 0 (no better
+    than predicting the mean) or goes negative (worse than that).
+
+    Previously this compared test_rmse against a hand-rolled "typical_scale"
+    (mean(abs(y_mean)) -- the mean of the target's own per-horizon-step
+    MEAN value). That's a central-tendency measure, not a spread measure,
+    and RMSE is fundamentally a spread/error quantity -- comparing it
+    against the wrong kind of baseline produced a relative_error of ~0.81
+    for this project's actual checkpoint (model_error_score ~0.19), which
+    is below the 0.5 low-confidence threshold for every window regardless
+    of input, since this component never varies per-window in the first
+    place (it's a fixed property of the trained checkpoint). Swapping in
+    mean(abs(y_std)) -- a real spread measure -- barely moved the needle
+    (relative_error ~0.85, if anything worse), confirming the baseline
+    itself was the wrong concept, not just the wrong array.
+
+    R2 is already RMSE properly normalized against the target's own
+    variance (R2 = 1 - SS_res/SS_tot, which reduces to ~1 - MSE/Var(y) for
+    a single global fit) -- exactly the "is this error large or small
+    relative to what we're predicting" question this score exists to
+    answer, computed the statistically standard way instead of
+    reinvented. It's already computed and stored in the checkpoint
+    (test_metrics['r2']), so this also removes an unnecessary derived
+    quantity (typical_scale) rather than adding one.
+    """
+    return float(np.clip(test_r2, 0.0, 1.0))
 
 
 def score_window_confidence(
     net_flow_window: np.ndarray,
     observed_days: int,
     lookback: int,
-    test_rmse: float,
-    typical_scale: float,
+    test_r2: float,
     low_confidence_threshold: float = 0.5,
 ) -> ConfidenceBreakdown:
     """Score a single forecast window's reliability.
@@ -100,14 +119,14 @@ def score_window_confidence(
         transaction data, vs. zero-padding for a business with less history
         than the model expects.
     lookback : the model's configured lookback length.
-    test_rmse : the held-out test RMSE recorded in the model checkpoint.
-    typical_scale : a representative magnitude for the target (e.g. mean
-        absolute cash_position over the training set), used to convert
-        RMSE into a relative error.
+    test_r2 : the held-out test R2 recorded in the model checkpoint --
+        already RMSE normalized against the target's own variance, the
+        correct baseline for "is this model's error large or small"
+        (see _model_error_score).
     """
     history_score = _history_completeness_score(observed_days, lookback)
     volatility_score = _volatility_score(net_flow_window)
-    model_error_score = _model_error_score(test_rmse, typical_scale)
+    model_error_score = _model_error_score(test_r2)
 
     overall = min(history_score, volatility_score, model_error_score)
 

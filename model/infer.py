@@ -70,10 +70,6 @@ class CashFlowForecaster:
         self.y_std = checkpoint["y_std"]
         self.test_metrics = checkpoint["test_metrics"]
 
-        # Representative scale for turning the recorded test RMSE into a
-        # relative error inside the confidence score.
-        self.typical_scale = float(np.mean(np.abs(self.y_mean)))
-
     def predict_window(
         self,
         feature_window: np.ndarray,
@@ -116,8 +112,7 @@ class CashFlowForecaster:
             net_flow_window=net_flow_window,
             observed_days=observed_days,
             lookback=self.lookback,
-            test_rmse=self.test_metrics["rmse"],
-            typical_scale=self.typical_scale,
+            test_r2=self.test_metrics["r2"],
         )
 
         return ForecastResult(forecast=forecast, confidence=confidence)
