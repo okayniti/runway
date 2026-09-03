@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ShieldCheck } from "lucide-react";
 
+import { PaperAirplane } from "@/components/paper-airplane";
 import { Reveal } from "@/components/reveal";
 import { fetchCalibration } from "@/lib/api";
 import type { CalibrationReport } from "@/lib/types";
@@ -54,7 +55,8 @@ export function CalibrationSpotlight() {
   const maxRuns = Math.max(low?.num_runs ?? 0, high?.num_runs ?? 0);
 
   return (
-    <section className="bg-ink px-6 pt-16 pb-28">
+    <section className="relative bg-ink px-6 pt-16 pb-28">
+      <PaperAirplane size={56} rotate={14} flip className="absolute right-8 top-24 sm:right-16" bobDelay={0.6} />
       <div className="mx-auto max-w-5xl">
         <Reveal>
           <span className="inline-flex items-center gap-2 rounded-full border border-paper/20 px-3.5 py-1.5 text-xs font-medium uppercase tracking-wide text-paper/70">

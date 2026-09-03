@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, useInView } from "framer-motion";
 
+import { PaperAirplane } from "@/components/paper-airplane";
 import { Reveal } from "@/components/reveal";
 import { fetchStats } from "@/lib/api";
 import type { TrackRecordStats } from "@/lib/types";
@@ -52,7 +53,8 @@ export function TrackRecord() {
   }, []);
 
   return (
-    <section id="track-record" className="border-t border-paper/10 bg-ink px-6 py-28">
+    <section id="track-record" className="relative border-t border-paper/10 bg-ink px-6 py-28">
+      <PaperAirplane size={56} rotate={-10} className="absolute right-8 top-14 sm:right-16" bobDelay={0.6} />
       <div className="mx-auto max-w-5xl">
         <Reveal>
           <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-paper/50">Track record</p>

@@ -1,3 +1,4 @@
+import { PaperAirplane } from "@/components/paper-airplane";
 import { Reveal } from "@/components/reveal";
 
 const COLUMNS: { heading: string; links: { label: string; href: string }[] }[] = [
@@ -21,7 +22,8 @@ const COLUMNS: { heading: string; links: { label: string; href: string }[] }[] =
 export function Footer() {
   return (
     <Reveal>
-      <footer className="border-t border-line px-6 py-16">
+      <footer className="relative border-t border-line px-6 py-16">
+        <PaperAirplane size={30} rotate={-14} className="absolute right-8 top-10 sm:right-16" bobDelay={0.6} />
         <div className="mx-auto flex max-w-5xl flex-col gap-12 sm:flex-row sm:justify-between">
           <div>
             <p className="font-display text-xl italic font-semibold text-ink">runway</p>

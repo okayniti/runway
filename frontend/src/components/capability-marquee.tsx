@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { PaperAirplane } from "@/components/paper-airplane";
 import { Reveal } from "@/components/reveal";
 
 // What actually feeds the forecast — real system capabilities, not
@@ -45,7 +46,14 @@ function Track() {
 export function CapabilityMarquee() {
   return (
     <Reveal>
-      <section className="border-y border-line bg-paper-dim py-6">
+      <section className="relative border-y border-line bg-paper-dim py-6">
+        <PaperAirplane
+          size={36}
+          rotate={10}
+          className="absolute right-6 top-1/2 z-10 -translate-y-1/2"
+          entranceDelay={0.15}
+          bobDelay={0.8}
+        />
         <div className="overflow-hidden">
           <div className="animate-marquee flex w-max hover:[animation-play-state:paused]">
             <Track />

@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { BellRing, Database, KeySquare, ListChecks, type LucideIcon } from "lucide-react";
 
+import { PaperAirplane } from "@/components/paper-airplane";
 import { Reveal } from "@/components/reveal";
 
 const FEATURES: { icon: LucideIcon; title: string; description: string }[] = [
@@ -44,7 +45,8 @@ const cardReveal = {
 
 export function FeaturesGrid() {
   return (
-    <section className="bg-paper-dim px-6 py-28">
+    <section className="relative bg-paper-dim px-6 py-28">
+      <PaperAirplane size={56} rotate={-18} className="absolute right-8 top-14 sm:right-16" bobDelay={0.6} />
       <div className="mx-auto max-w-5xl">
         <Reveal>
           <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-ember">Beyond the forecast</p>

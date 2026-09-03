@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { FileSpreadsheet, Sparkles, UploadCloud } from "lucide-react";
 
+import { PaperAirplane } from "@/components/paper-airplane";
 import { ProcessingMicrocopy } from "@/components/processing-microcopy";
 import { Reveal } from "@/components/reveal";
 import { ResultDisplay } from "@/components/result-display";
@@ -69,7 +70,8 @@ export function LiveForecastPanel() {
   }
 
   return (
-    <section id="forecast" className="px-6 py-28">
+    <section id="forecast" className="relative px-6 py-28">
+      <PaperAirplane size={56} rotate={9} flip className="absolute right-8 top-14 sm:right-16" bobDelay={0.6} />
       <div className="mx-auto max-w-5xl">
         <Reveal>
           <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-ember">
