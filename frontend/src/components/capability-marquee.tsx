@@ -50,7 +50,9 @@ export function CapabilityMarquee() {
         <PaperAirplane
           size={36}
           rotate={10}
-          className="absolute right-6 top-1/2 z-10 -translate-y-1/2"
+          side="left"
+          edgeOffset="marquee"
+          className="absolute top-1/2 z-10 -translate-y-1/2"
           entranceDelay={0.15}
           bobDelay={0.8}
         />

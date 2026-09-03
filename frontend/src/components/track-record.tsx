@@ -54,7 +54,7 @@ export function TrackRecord() {
 
   return (
     <section id="track-record" className="relative border-t border-paper/10 bg-ink px-6 py-28">
-      <PaperAirplane size={56} rotate={-10} className="absolute right-8 top-14 sm:right-16" bobDelay={0.6} />
+      <PaperAirplane size={56} rotate={-10} side="left" className="absolute top-14" bobDelay={0.6} />
       <div className="mx-auto max-w-5xl">
         <Reveal>
           <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-paper/50">Track record</p>

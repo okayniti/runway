@@ -29,7 +29,7 @@ export function Hero() {
           looking at a screenshot, not just checking for console errors). */}
       <div className="bg-grid pointer-events-none absolute inset-0" aria-hidden="true" />
 
-      <PaperAirplane className="absolute right-6 top-28 sm:right-12 md:right-24" />
+      <PaperAirplane edgeOffset="tight" className="absolute top-28" />
 
       <div className="mx-auto w-full max-w-5xl">
         <motion.p
