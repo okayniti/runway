@@ -16,6 +16,7 @@ import {
 
 import { ForecastChart } from "@/components/forecast-chart";
 import type { ContributingLineItem, ForecastOutput, Recommendation } from "@/lib/types";
+import { useTilt } from "@/lib/use-tilt";
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   payroll: Users,
@@ -41,8 +42,13 @@ const cardReveal = {
 
 function LineItemCard({ item }: { item: ContributingLineItem }) {
   const Icon = CATEGORY_ICONS[item.category] ?? CircleDollarSign;
+  const tilt = useTilt();
   return (
     <motion.div
+      ref={tilt.ref}
+      onMouseMove={tilt.onMouseMove}
+      onMouseLeave={tilt.onMouseLeave}
+      style={tilt.style}
       variants={cardReveal}
       whileHover={{ y: -3 }}
       className="rounded-2xl border border-line bg-paper-card p-5 transition-shadow hover:shadow-md"
@@ -66,8 +72,13 @@ function LineItemCard({ item }: { item: ContributingLineItem }) {
 
 function RecommendationCard({ rec }: { rec: Recommendation }) {
   const Icon = ACTION_ICONS[rec.action];
+  const tilt = useTilt();
   return (
     <motion.div
+      ref={tilt.ref}
+      onMouseMove={tilt.onMouseMove}
+      onMouseLeave={tilt.onMouseLeave}
+      style={tilt.style}
       variants={cardReveal}
       whileHover={{ y: -3 }}
       className="rounded-2xl border border-line bg-paper-card p-5 transition-shadow hover:shadow-md"
