@@ -1,22 +1,21 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { ArrowDown } from "lucide-react";
 
 import { PaperAirplane } from "@/components/paper-airplane";
 
-// The old way runway replaces -- reinforces the headline rather than
-// decorating around it. Deliberately understated (small, muted, tilted)
-// so it never competes with the hero copy for attention.
-const CHAOS_TAGS: { label: string; rotate: number }[] = [
-  { label: "spreadsheet gut-checks", rotate: -3 },
-  { label: "found out too late", rotate: 2 },
-  { label: "manual reconciliation", rotate: -1.5 },
-  { label: "chasing invoices", rotate: 3 },
-  { label: "guessing the runway", rotate: -2 },
-  { label: "Excel roulette", rotate: 1.5 },
-  { label: "hoping payroll clears", rotate: -2.5 },
-];
+// Client-only. The fall values are deterministic (no Math.random() at
+// render time), but framer-motion still serializes its inline transform/
+// opacity styles with different float precision and unit formatting
+// between the server render and the client mount ("0" vs 0, rounded vs
+// full-precision translateX) -- a known framer-motion + Next SSR quirk,
+// confirmed by re-checking the console after switching to seeded values:
+// the mismatch persisted with identical numbers on both sides, just
+// formatted differently. Skipping SSR for this purely decorative block
+// sidesteps it outright.
+const ChaosTags = dynamic(() => import("@/components/chaos-tags").then((m) => m.ChaosTags), { ssr: false });
 
 export function Hero() {
   return (
@@ -81,25 +80,7 @@ export function Hero() {
 
         <div className="mt-16">
           <p className="mb-4 text-xs font-medium uppercase tracking-[0.15em] text-ink-faint">The old way</p>
-          <div className="flex max-w-2xl flex-wrap gap-3">
-            {CHAOS_TAGS.map((tag, i) => (
-              <motion.span
-                key={tag.label}
-                initial={{ opacity: 0, y: -70, rotate: 0 }}
-                animate={{ opacity: 1, y: 0, rotate: tag.rotate }}
-                transition={{
-                  duration: 0.6,
-                  delay: 0.6 + i * 0.07,
-                  type: "spring",
-                  stiffness: 140,
-                  damping: 14,
-                }}
-                className="rounded-full border border-line bg-paper-card/70 px-3.5 py-1.5 text-xs text-ink-muted sm:text-sm"
-              >
-                {tag.label}
-              </motion.span>
-            ))}
-          </div>
+          <ChaosTags />
         </div>
       </div>
     </section>
