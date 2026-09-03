@@ -12,12 +12,18 @@ GET /health reports whether the model checkpoint loaded successfully at
 startup, so a broken/missing checkpoint fails fast and visibly instead of
 surfacing as a 500 on someone's first real request.
 
+RUNWAY_WEBHOOK_URL, if set, is a Slack Incoming Webhook URL. Any run that
+comes back risk_flag=True — whether from a manual POST /forecast or from
+the background scheduler below — fires a readable Slack alert (shortfall
+amount, the date it triggers, top recommended action; see agent/webhook.py).
+A failed or unreachable webhook is logged, never fatal to the request.
+
 A background scheduler (agent/scheduler.py) can optionally re-run the
-forecast on an interval and POST a webhook when risk flips true, without
-anyone calling /forecast manually — disabled by default, opt in with:
+forecast on an interval too, without anyone calling /forecast manually —
+disabled by default, opt in with:
     RUNWAY_SCHEDULER_ENABLED=true
     RUNWAY_SCHEDULE_INTERVAL_SECONDS=3600   (default)
-    RUNWAY_WEBHOOK_URL=https://example.com/hook  (optional; no webhook fires without it)
+    RUNWAY_WEBHOOK_URL=https://hooks.slack.com/services/...  (optional; no alert fires without it)
     RUNWAY_SCHEDULE_DATA_CSV=data/synthetic_transactions.csv  (default)
     RUNWAY_SCHEDULE_SHORTFALL_THRESHOLD=0   (default)
     RUNWAY_SCHEDULE_TENANT_ID=default        (default)
@@ -38,6 +44,7 @@ Run with:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -52,13 +59,26 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Nothing in this codebase previously called logging.basicConfig anywhere,
+# so every logger.info() call across this module, agent/webhook.py, and
+# agent/scheduler.py (webhook delivery confirmations included) was silently
+# dropped -- Python's root logger has no handler until something configures
+# one, and the interpreter's last-resort handler only surfaces WARNING and
+# above. Configured once here, at the actual process entry point (uvicorn
+# imports this module), so every "runway.*" logger in the app actually
+# reaches the console instead of only failures being visible.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 from agent.calibration import CalibrationReport, build_calibration_report  # noqa: E402
 from agent.schema import ForecastOutput  # noqa: E402
 from agent.scheduler import start_scheduler  # noqa: E402
 from agent.stats import TrackRecordStats, build_track_record_stats  # noqa: E402
 from agent.store import DEFAULT_TENANT_ID, ForecastStore  # noqa: E402
+from agent.webhook import dispatch_risk_alert  # noqa: E402
 from agent.wrapper import ForecastValidationError, build_forecast_output  # noqa: E402
 from model.infer import CashFlowForecaster  # noqa: E402
+
+logger = logging.getLogger("runway.api")
 
 CHECKPOINT_PATH = PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt"
 
@@ -205,7 +225,7 @@ def forecast(request: ForecastRequest, tenant_id: str = Depends(resolve_tenant))
     transactions = pd.DataFrame.from_records([t.model_dump() for t in request.transactions])
 
     try:
-        return build_forecast_output(
+        output = build_forecast_output(
             forecaster=forecaster,
             transactions=transactions,
             shortfall_threshold=request.shortfall_threshold,
@@ -216,3 +236,23 @@ def forecast(request: ForecastRequest, tenant_id: str = Depends(resolve_tenant))
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    webhook_url = os.environ.get("RUNWAY_WEBHOOK_URL")
+    if output.risk_flag and webhook_url:
+        # Best-effort, and deliberately outside the try/except above: a
+        # failed or unreachable alert destination must never turn a
+        # perfectly good forecast response into a 500. dispatch_risk_alert
+        # itself never raises (see agent/webhook.py), but this is wrapped
+        # too so a bug in payload construction can't take the request down
+        # either — the same "never fatal to the caller" guarantee, one
+        # layer further out.
+        try:
+            as_of_date = transactions["date"].astype("datetime64[ns]").max().date().isoformat()
+            delivered = dispatch_risk_alert(webhook_url, tenant_id, as_of_date, output, request.shortfall_threshold)
+            logger.info(
+                "webhook %s to %s for tenant %s", "delivered" if delivered else "FAILED", webhook_url, tenant_id
+            )
+        except Exception:  # noqa: BLE001 - alerting is best-effort, never fatal to the forecast response
+            logger.exception("webhook dispatch raised unexpectedly for tenant %s", tenant_id)
+
+    return output

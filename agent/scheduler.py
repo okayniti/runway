@@ -23,11 +23,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 try:
     from .store import ForecastStore
-    from .webhook import build_alert_payload, dispatch_webhook
+    from .webhook import dispatch_risk_alert
     from .wrapper import build_forecast_output
 except ImportError:  # running as a top-level script rather than a package
     from store import ForecastStore
-    from webhook import build_alert_payload, dispatch_webhook
+    from webhook import dispatch_risk_alert
     from wrapper import build_forecast_output
 
 logger = logging.getLogger("runway.scheduler")
@@ -61,8 +61,7 @@ def run_scheduled_forecast(
 
     if output.risk_flag and webhook_url:
         as_of_date = pd.to_datetime(transactions["date"]).max().date().isoformat()
-        payload = build_alert_payload(tenant_id, as_of_date, output)
-        delivered = dispatch_webhook(webhook_url, payload)
+        delivered = dispatch_risk_alert(webhook_url, tenant_id, as_of_date, output, shortfall_threshold)
         logger.info("webhook %s to %s for tenant %s", "delivered" if delivered else "FAILED", webhook_url, tenant_id)
 
 

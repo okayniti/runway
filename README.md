@@ -27,8 +27,10 @@ A financial cash-flow forecasting system using Bi-LSTM models, served via FastAP
                                                      actually predictive of error?
                                                      (real evidence, not asserted)
 
-    agent/scheduler.py + webhook.py (opt-in, RUNWAY_SCHEDULER_ENABLED=true): re-runs the
-    pipeline on an interval with no manual request, POSTs a structured alert when risk_flag flips true
+    agent/webhook.py: POSTs a readable Slack alert (RUNWAY_WEBHOOK_URL) the moment any run
+    -- manual /forecast or scheduled -- comes back risk_flag=true
+    agent/scheduler.py (opt-in, RUNWAY_SCHEDULER_ENABLED=true): re-runs the pipeline on an
+    interval with no manual request
 ```
 
 - **`data/`** — `generate_synthetic_transactions.py` produces a synthetic transaction ledger for a mid-size business: receivables with delay/partial-payment/missed-payment noise, recurring payroll/rent, variable vendor payables, and weekly/monthly seasonality.
@@ -46,7 +48,7 @@ The agent layer (`agent/`) started as a single-shot risk-flagging wrapper around
 
 **Schema-enforced recommended actions.** When `risk_flag` is true, `agent/recommendations.py` proposes up to 3 concrete interventions — `delay_payment` on the specific outflows already identified as driving the shortfall, `accelerate_collection` benchmarked against the largest real receivable in the trailing lookback window — each ranked by dollar impact and validated against a strict Pydantic schema (`agent.schema.Recommendation`). Why it matters: "you're at risk" is a diagnosis; a recommendation is a next step. Every field is computed from real contributing line items or real transaction history, never free text — the schema makes hallucinated advice structurally impossible, the same discipline the rest of the agent layer already applies to the forecast itself.
 
-**Scheduled and webhook-triggered monitoring.** `agent/scheduler.py` (APScheduler) can re-run the full pipeline on an interval with no manual request, and `agent/webhook.py` POSTs a structured alert to a configured URL the moment a run comes back `risk_flag=true`. Opt-in via `RUNWAY_SCHEDULER_ENABLED=true` — disabled by default, so nothing about manual `/forecast` usage changes. Why it matters: this is what separates "a tool you have to remember to open" from "always-on monitoring" — the actual shape of what a business would pay for.
+**Real Slack alerting, on-demand or scheduled.** `agent/webhook.py` POSTs a readable Slack message — the shortfall amount, the calendar date it triggers, and the top recommended action — to a Slack Incoming Webhook URL (`RUNWAY_WEBHOOK_URL`) the moment *any* run comes back `risk_flag=true`, whether that run was a manual `POST /forecast` or a scheduled tick. `agent/scheduler.py` (APScheduler) additionally re-runs the full pipeline on an interval with no manual request — opt-in via `RUNWAY_SCHEDULER_ENABLED=true`, disabled by default so nothing about manual usage changes. Neither path fires without `RUNWAY_WEBHOOK_URL` set, and a failed or unreachable webhook is logged, never fatal to the forecast request or the scheduler tick. Why it matters: this is what separates "a tool you have to remember to open" from "always-on monitoring" — the actual shape of what a business would pay for.
 
 **Multi-tenant API-key scoping.** An optional `X-API-Key` header on `/forecast` and `/calibration` resolves to a `tenant_id` (`RUNWAY_API_KEYS`, JSON) that scopes everything written to the history store. No key falls back to a `default` tenant, so existing callers are unaffected; an unrecognized key is rejected with 401 rather than silently mis-scoping data. Why it matters: even demoed with one tenant, this is the difference between a hardcoded single-dataset script and an architecture actually built for multiple clients.
 
@@ -101,13 +103,22 @@ python model/infer.py
 #    trigger)
 python agent/wrapper.py --shortfall-threshold 6000000
 
-# 7. Start the API
+# 7. (Optional) Wire up Slack alerts: create a Slack Incoming Webhook
+#    (api.slack.com/apps -> Create New App -> From scratch -> Incoming
+#    Webhooks -> Activate -> Add New Webhook to Workspace), then set
+#    RUNWAY_WEBHOOK_URL to the URL it gives you. With this set, any
+#    /forecast call (or scheduled run) that comes back risk_flag=true
+#    posts a readable alert to that Slack channel.
+set RUNWAY_WEBHOOK_URL=https://hooks.slack.com/services/...   # Windows
+# export RUNWAY_WEBHOOK_URL=https://hooks.slack.com/services/... # macOS/Linux
+
+# 8. Start the API
 uvicorn api.app:app --reload
 
-# 8. In a separate terminal, start the dashboard (API must be running)
+# 9. In a separate terminal, start the dashboard (API must be running)
 streamlit run dashboard/app.py
 
-# 9. Generate a batch exception report
+# 10. Generate a batch exception report
 python reports/generate_report.py --num-windows 30
 ```
 
