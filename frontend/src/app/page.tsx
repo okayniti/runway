@@ -1,4 +1,5 @@
 import { CapabilityMarquee } from "@/components/capability-marquee";
+import { FeaturesGrid } from "@/components/features-grid";
 import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
 import { LiveForecastPanel } from "@/components/live-forecast-panel";
@@ -13,6 +14,7 @@ export default function Home() {
         <Hero />
         <CapabilityMarquee />
         <LiveForecastPanel />
+        <FeaturesGrid />
         <TrackRecord />
       </main>
       <Footer />
