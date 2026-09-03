@@ -46,7 +46,7 @@ function Track() {
 export function CapabilityMarquee() {
   return (
     <Reveal>
-      <section className="relative border-y border-line bg-paper-dim py-6">
+      <section className="relative border-y border-line bg-ember-dim py-6">
         <PaperAirplane
           size={36}
           rotate={10}
