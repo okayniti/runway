@@ -40,6 +40,7 @@ In practical terms, it replaces a recurring manual task — someone periodically
 - **`agent/`** — `schema.py` defines the strict `ForecastOutput` contract (forecast, confidence, risk_flag, risk_reason, contributing_line_items, recommendations); `risk.py` checks the forecast against a configurable shortfall threshold and attributes a triggered shortfall to specific recurring obligations or historically large outflows; `recommendations.py` proposes ranked, schema-enforced interventions when risk is flagged; `wrapper.py` assembles all of it, validates against the schema, and (when wired with a store) logs the run; `store.py` is the SQLite-backed persistent history with retroactive error backfilling; `scheduler.py` + `webhook.py` provide opt-in always-on monitoring; `calibration.py` reports whether confidence has actually tracked forecast error. See "Agent capabilities" below for what each of these does and why it's there.
 - **`api/`** — a FastAPI app exposing `POST /forecast` (validated input → full agent output as JSON, tenant-scoped via an optional `X-API-Key` header) and `GET /calibration` (confidence-calibration report, same tenant scoping), plus `GET /health` (reports whether the checkpoint loaded). Can optionally run a background scheduler in-process (opt-in, see below).
 - **`dashboard/`** — a thin Streamlit client that calls `/forecast` and renders the forecast line, a per-day confidence indicator, and a risk alert banner with contributing line items. No forecasting logic lives here.
+- **`frontend/`** — a Next.js marketing/demo site: a live forecast panel (upload a ledger CSV or use the bundled sample, set a threshold, run against the real API), a track-record section and calibration spotlight backed by real `/stats` and `/calibration` data, and the rest of the page copy. Talks to the API through a same-origin `/api/backend/*` proxy (see `frontend/next.config.ts`) so the backend needs no CORS setup and its real address is never in client-side code. No forecasting logic lives here either — same principle as `dashboard/`, a second, more polished client against the same API.
 - **`reports/`** — `generate_report.py` runs the checkpoint across a batch of as-of dates and writes a markdown exception report: recorded held-out accuracy, every low-confidence window with reasons, and every window the pipeline explicitly couldn't forecast.
 
 ## Agent capabilities
@@ -120,7 +121,17 @@ uvicorn api.app:app --reload
 # 9. In a separate terminal, start the dashboard (API must be running)
 streamlit run dashboard/app.py
 
-# 10. Generate a batch exception report
+# 10. In a separate terminal, start the Next.js frontend (API must be
+#     running; the frontend proxies to it at http://127.0.0.1:8000 by
+#     default -- set BACKEND_URL before `npm run dev` if the API is
+#     running somewhere else)
+cd frontend
+npm install
+npm run dev
+# open http://localhost:3000 -- the live forecast panel there works
+# against the bundled sample-ledger.csv with no upload needed
+
+# 11. Generate a batch exception report
 python reports/generate_report.py --num-windows 30
 ```
 

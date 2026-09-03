@@ -96,7 +96,7 @@ def diagnose_loss_curve(losses: list[float]) -> str:
     early = float(np.mean(losses[:chunk]))
     late = float(np.mean(losses[-chunk:]))
     if early == 0:
-        return "flat (zero loss throughout — check for a bug)"
+        return "flat (zero loss throughout -- check for a bug)"
     relative_change = (late - early) / early
     if relative_change < -0.10:
         return f"decreasing ({early:.4f} -> {late:.4f}, {relative_change:+.1%})"
@@ -125,6 +125,14 @@ def main() -> None:
     on the held-out test split, print RMSE/MAE/R2 plus diagnostics (loss
     curve, sample predictions), and save a checkpoint. See module
     docstring for usage."""
+    import sys as _sys
+
+    # Same fix as agent/wrapper.py's CLI entry point: force UTF-8 stdout so
+    # redirected output can't fall back to a codepage that mangles any
+    # non-ASCII character a future print statement here might introduce.
+    if hasattr(_sys.stdout, "reconfigure"):
+        _sys.stdout.reconfigure(encoding="utf-8")
+
     project_root = Path(__file__).resolve().parent.parent
 
     parser = argparse.ArgumentParser(description="Train the Bi-LSTM cash-flow forecaster.")
@@ -241,7 +249,7 @@ def main() -> None:
     print(f"Val loss curve:   {diagnose_loss_curve(val_losses)}")
     print(
         f"Best val_mse={best_val_loss:.4f} at epoch {best_epoch}/{args.epochs} "
-        f"(final epoch val_mse={val_losses[-1]:.4f}) — using best-epoch weights for "
+        f"(final epoch val_mse={val_losses[-1]:.4f}) -- using best-epoch weights for "
         "test evaluation and the saved checkpoint, not the final epoch's, since the "
         "val curve above shows overfitting past that point."
     )

@@ -144,6 +144,17 @@ def main() -> None:
     import argparse
     import sys as _sys
 
+    # Recommendation descriptions (agent/recommendations.py) legitimately
+    # contain an em dash for readability. Found via a fresh-clone test on
+    # Windows: with stdout redirected to a file, Python falls back to the
+    # system codepage (cp1252) instead of UTF-8, which can't represent that
+    # character -- the CLI's own JSON output came out with a single 0x97
+    # byte in place of the dash, invalid UTF-8, unparseable by any
+    # downstream `json.load()`. Forcing UTF-8 here fixes the actual output,
+    # not just how it happens to look in one terminal.
+    if hasattr(_sys.stdout, "reconfigure"):
+        _sys.stdout.reconfigure(encoding="utf-8")
+
     parser = argparse.ArgumentParser(description="Run the agent layer's risk-flagging forecast wrapper.")
     parser.add_argument("--data-csv", default=str(PROJECT_ROOT / "data" / "synthetic_transactions.csv"))
     parser.add_argument(
