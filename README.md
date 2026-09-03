@@ -6,6 +6,8 @@ A financial cash-flow forecasting system using Bi-LSTM models, served via FastAP
 
 `runway` forecasts a business's 14-day-ahead net cash position from its recent transaction history, and wraps that forecast with two things a raw number doesn't give you: a **confidence score** (is this window actually predictable, or is the model guessing?) and a **risk layer** (did the forecast cross a shortfall threshold, and if so, which specific line items are driving it?). It's a full pipeline, not just a model — synthetic data generation, training/inference, risk logic, an HTTP API, a dashboard, and batch reporting all live in this repo.
 
+In practical terms, it replaces a recurring manual task — someone periodically pulling bank balances into a spreadsheet to eyeball how much runway is left — with continuous, automated monitoring that alerts on its own the moment risk is detected (see "Scheduled and webhook-triggered monitoring" below). The cost shape shifts accordingly: from a person's recurring time to API/compute (model inference, hosting, outbound alerts) that scales with usage rather than with headcount. No specific pricing is claimed here — that's a real cost-shape difference, not a costed-out business case.
+
 ## Architecture
 
 ```

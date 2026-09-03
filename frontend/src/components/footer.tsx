@@ -55,7 +55,11 @@ export function Footer() {
         </div>
 
         <div className="mx-auto mt-16 max-w-5xl border-t border-line pt-8 text-xs text-ink-faint">
-          A single-tenant demo of a multi-tenant-shaped forecasting agent.
+          <p>
+            Replaces manual weekly cash reviews with continuous, automated monitoring — the
+            cost shifts from a person&rsquo;s recurring time to API/compute, not headcount.
+          </p>
+          <p className="mt-2">A single-tenant demo of a multi-tenant-shaped forecasting agent.</p>
         </div>
       </footer>
     </Reveal>
