@@ -18,6 +18,26 @@ the background scheduler below — fires a readable Slack alert (shortfall
 amount, the date it triggers, top recommended action; see agent/webhook.py).
 A failed or unreachable webhook is logged, never fatal to the request.
 
+Deployment-relevant environment variables (all optional, all default to
+values that reproduce exactly what running this locally with no env vars
+set already did — see DEPLOYMENT.md for the full walkthrough):
+    PORT=8000                       used only by the `python api/app.py`
+                                     fallback at the bottom of this file;
+                                     Railway/Render set this themselves,
+                                     `uvicorn ... --port $PORT` in the
+                                     start command is the normal path
+    RUNWAY_DB_PATH=agent/store.db   where the SQLite history file lives;
+                                     point this at a platform-mounted
+                                     persistent volume in production, or
+                                     the store resets on every redeploy
+    RUNWAY_CORS_ORIGINS             comma-separated allowed origins for
+                                     browser calls made directly to this
+                                     API (not the same-origin frontend
+                                     proxy, which needs no CORS at all --
+                                     see frontend/next.config.ts). Empty
+                                     by default: no cross-origin browser
+                                     access until explicitly opened up.
+
 A background scheduler (agent/scheduler.py) can optionally re-run the
 forecast on an interval too, without anyone calling /forecast manually —
 disabled by default, opt in with:
@@ -53,6 +73,7 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -82,10 +103,35 @@ logger = logging.getLogger("runway.api")
 
 CHECKPOINT_PATH = PROJECT_ROOT / "model" / "checkpoints" / "bilstm_cashflow.pt"
 
+# Defaults to the same path this always used (agent/store.db, next to the
+# module that owns it) so local behavior is byte-for-byte unchanged with no
+# env vars set. In production, point this at wherever the platform's
+# persistent disk is mounted -- Railway and Render both support one, but at
+# a path you choose in their dashboard, not a fixed convention -- otherwise
+# the whole point of the store (a track record that survives redeploys)
+# doesn't hold: SQLite writes to the container's own ephemeral filesystem
+# vanish the moment it restarts.
+DB_PATH = os.environ.get("RUNWAY_DB_PATH", str(PROJECT_ROOT / "agent" / "store.db"))
+
 # API key -> tenant_id. Override with RUNWAY_API_KEYS (JSON) for real
 # deployments; the built-in default exists purely so the demo key used in
 # examples/tests resolves to something without requiring env setup.
 API_KEYS: dict[str, str] = json.loads(os.environ.get("RUNWAY_API_KEYS", '{"demo-key": "demo-tenant"}'))
+
+# Comma-separated list of origins allowed to call this API directly from a
+# browser (Access-Control-Allow-Origin). Empty by default -- the frontend
+# doesn't need an entry here at all, since it talks to this API through its
+# own same-origin /api/backend/* proxy (see frontend/next.config.ts), which
+# is a server-to-server request the browser's CORS policy never applies to.
+# This only matters for something calling the deployed API's URL directly:
+# a hosted API-docs page on a different origin, a second frontend, curl
+# from a browser console. Sends "*" through unmodified for anyone who
+# wants a fully open API during early testing -- FastAPI's CORSMiddleware
+# won't combine "*" with allow_credentials=True, which is fine here since
+# this API authenticates via an X-API-Key header, never cookies.
+CORS_ORIGINS: list[str] = [
+    origin.strip() for origin in os.environ.get("RUNWAY_CORS_ORIGINS", "").split(",") if origin.strip()
+]
 
 _state: dict = {"forecaster": None, "load_error": None, "store": None, "scheduler": None}
 
@@ -108,7 +154,7 @@ async def lifespan(app: FastAPI):
         _state["forecaster"] = CashFlowForecaster(CHECKPOINT_PATH)
     except Exception as exc:  # noqa: BLE001 - surfaced via /health, not a crash
         _state["load_error"] = str(exc)
-    _state["store"] = ForecastStore()
+    _state["store"] = ForecastStore(db_path=DB_PATH)
 
     if os.environ.get("RUNWAY_SCHEDULER_ENABLED", "").lower() in ("1", "true", "yes"):
         if _state["forecaster"] is not None:
@@ -135,6 +181,15 @@ app = FastAPI(
     description="Cash-flow forecasting and risk-flagging API",
     lifespan=lifespan,
 )
+
+if CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=CORS_ORIGINS,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 class TransactionRecord(BaseModel):
@@ -256,3 +311,16 @@ def forecast(request: ForecastRequest, tenant_id: str = Depends(resolve_tenant))
             logger.exception("webhook dispatch raised unexpectedly for tenant %s", tenant_id)
 
     return output
+
+
+if __name__ == "__main__":
+    # Not the normal way this runs (that's `uvicorn api.app:app --reload`
+    # locally, or `--host 0.0.0.0 --port $PORT` in production -- see
+    # DEPLOYMENT.md). This exists because some platforms' default start
+    # command for an auto-detected Python app is just `python <entry>`
+    # with no chance to pass uvicorn flags -- if that's what ends up
+    # running, it should still bind the platform's actual port instead of
+    # always 8000.
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))

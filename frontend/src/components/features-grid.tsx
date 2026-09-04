@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { BellRing, Database, KeySquare, ListChecks, type LucideIcon } from "lucide-react";
 
 import { PaperAirplane } from "@/components/paper-airplane";
@@ -33,12 +33,19 @@ const FEATURES: { icon: LucideIcon; title: string; description: string }[] = [
   },
 ];
 
-const gridStagger = {
+// Typed explicitly as Variants -- without it, TS infers `ease`'s cubic-
+// bezier tuple as a generic number[] here (this object has no contextual
+// type to narrow against, unlike an inline `transition={{ ease: [...] }}`
+// prop elsewhere in this codebase, where the JSX prop's own expected type
+// does that narrowing for free), which mismatches framer-motion's actual
+// Easing type and fails `next build`'s type-check outright -- caught by
+// running a real production build, not just `tsc --noEmit` in isolation.
+const gridStagger: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.1 } },
 };
 
-const cardReveal = {
+const cardReveal: Variants = {
   hidden: { opacity: 0, y: 20 },
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
 };

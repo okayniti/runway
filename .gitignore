@@ -17,13 +17,18 @@ dist/
 *.egg-info/
 .eggs/
 
-# Model checkpoints and artifacts
-*.pt
+# Model checkpoints and artifacts. The checkpoint actually used for
+# deployment (model/checkpoints/bilstm_cashflow.pt) is committed by
+# exception below -- it's ~23KB (a 4,350-parameter model), and a fresh
+# deploy shouldn't need a multi-minute model/train.py run just to serve
+# its first request. Anything else under checkpoints/ (alternate runs, a
+# larger architecture someone trains locally) stays ignored.
 *.pth
 *.ckpt
 *.onnx
-checkpoints/
 *.log
+model/checkpoints/*
+!model/checkpoints/bilstm_cashflow.pt
 
 # Generated synthetic/raw data (reproducible via data/generate_synthetic_transactions.py)
 data/*.csv
