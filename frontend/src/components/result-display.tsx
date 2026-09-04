@@ -143,17 +143,17 @@ export function ResultDisplay({ result, threshold }: { result: ForecastOutput; t
         )}
       </motion.div>
 
-      {/* Contributing line items — bento grid */}
+      {/* Contributing line items — bento grid. No whileInView here on purpose:
+          this renders the moment someone clicks "Run forecast", as part of
+          one result they already asked for, not scroll-driven page content
+          they're expected to discover -- it should inherit the same
+          immediate reveal as the risk banner and chart above it, from the
+          outer motion.div's animate="show" (via listStagger's own
+          staggerChildren), not gate on scrolling further down first. */}
       {contributing_line_items.length > 0 && (
         <motion.div variants={cardReveal}>
           <h3 className="mb-4 font-display text-2xl text-ink">What&rsquo;s driving it</h3>
-          <motion.div
-            variants={listStagger}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.2 }}
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-          >
+          <motion.div variants={listStagger} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {contributing_line_items.map((item, i) => (
               <LineItemCard key={`${item.date}-${item.category}-${i}`} item={item} />
             ))}
@@ -161,17 +161,11 @@ export function ResultDisplay({ result, threshold }: { result: ForecastOutput; t
         </motion.div>
       )}
 
-      {/* Recommendations — bento grid */}
+      {/* Recommendations — bento grid. Same reasoning as above. */}
       {recommendations.length > 0 && (
         <motion.div variants={cardReveal}>
           <h3 className="mb-4 font-display text-2xl text-ink">What would fix it</h3>
-          <motion.div
-            variants={listStagger}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.2 }}
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-          >
+          <motion.div variants={listStagger} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {recommendations.map((rec) => (
               <RecommendationCard key={rec.rank} rec={rec} />
             ))}
